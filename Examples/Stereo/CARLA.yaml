@@ -1,0 +1,79 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters. Adjust them!
+#--------------------------------------------------------------------------------------------
+File.version: "1.0"
+
+Camera.type: "Rectified"
+
+# Camera calibration and distortion parameters (OpenCV) 
+Camera1.fx: 516.0
+Camera1.fy: 516.0
+Camera1.cx: 516.0
+Camera1.cy: 388.0
+
+Camera.width: 1032
+Camera.height: 776
+
+# Camera frames per second 
+Camera.fps: 20
+
+Stereo.b: 0.52
+
+# Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
+Camera.RGB: 1
+
+# Close/Far threshold. Baseline times.
+Stereo.ThDepth: 35.0
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+
+# ORB Extractor: Number of features per image
+ORBextractor.nFeatures: 2000
+
+# ORB Extractor: Scale factor between levels in the scale pyramid 	
+ORBextractor.scaleFactor: 1.2
+
+# ORB Extractor: Number of levels in the scale pyramid	
+ORBextractor.nLevels: 8
+
+# ORB Extractor: Fast threshold
+# Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
+# Firstly we impose iniThFAST. If no corners are detected we impose a lower value minThFAST
+# You can lower these values if your images have low contrast			
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.6
+Viewer.KeyFrameLineWidth: 2.0
+Viewer.GraphLineWidth: 1.0
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.7
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -100.0
+Viewer.ViewpointZ: -0.1
+Viewer.ViewpointF: 2000.0
+
+#--------------------------------------------------------------------------------------------
+# Semantic Parameters
+#--------------------------------------------------------------------------------------------
+# Drop objects, which are moving
+Semantic.DropMoving: 0
+# Drop objects, which are potentially moving (Vehicles, Pedestrians)
+Semantic.DropDynamic: 0
+# Use semantic segmentation segmentation to assign points
+Semantic.UseSemantic: 0
+# Use instance segmentation to assign points
+Semantic.UseInstance: 0
+# Use semantic to improve loop closure
+Semantic.UseSemanticLoop: 0
+#--------------------------------------------------------------------------------------------
+# Evaluation Parameters
+#--------------------------------------------------------------------------------------------
