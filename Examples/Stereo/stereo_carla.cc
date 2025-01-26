@@ -17,7 +17,7 @@ void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft, 
                 vector<string> &vstrImageRight, vector<double> &vTimestamps);
 
 int main(int argc, char **argv) {
-        if (argc != 6) {
+        if (argc != 5) {
                 cerr << endl
                      << "Usage: ./carla path_to_vocabulary path_to_settings path_to_sequence results_path" << endl;
                 return 1;
