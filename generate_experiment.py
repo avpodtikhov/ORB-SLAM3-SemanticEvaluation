@@ -1,6 +1,11 @@
 import os
 import re
-from typing import List, Dict
+import yaml
+from typing import List, Dict, Optional
+from utils.version import SlamVersionManager
+from utils.config import ConfigManager
+import string
+from utils.functions import get_user_input
 
 # Словарь доступных датасетов
 AVAILABLE_DATASETS = {
@@ -13,8 +18,9 @@ AVAILABLE_DATASETS = {
     8: "Carla/8",
 }
 
-TEMPLATE_GENERATOR = '''from experiments import register_experiment
+TEMPLATE_EXPERIMENT = '''from experiments import register_experiment
 from experiments.base import BaseExperiment, ExperimentMetadata
+from typing import List
 
 @register_experiment("{experiment_id}")
 class {experiment_class}(BaseExperiment):
@@ -28,26 +34,36 @@ class {experiment_class}(BaseExperiment):
             description=\"\"\"
             {description}
             \"\"\",
-            parameters={parameters},
-            datasets={datasets}
+            default_slam_tag="{slam_tag}",
+            datasets={datasets},
+            parameters={parameters}
         )
     
-    def generate_configs(self) -> None:
+    def generate_configs(self) -> List[str]:
         """
         Генерация YAML конфигураций для эксперимента.
         
         Параметры эксперимента:
         {parameter_docs}
         
+        Returns:
+            Список путей к сгенерированным конфигам
+        
         Пример использования:
-            config = self.base_config.copy()
-            config.update({{
-                "ORBextractor": {{
-                    "param1": value1,
-                    "param2": value2
-                }}
-            }})
-            self.save_config(config, f"config_name")
+            config_paths = []
+            
+            # Обновляем один параметр
+            config = self.update_parameter("param_name", value)
+            path = self.save_config(config, f"param_name_{{value}}")
+            config_paths.append(path)
+            
+            # Или в цикле для нескольких значений
+            for value in [1.0, 2.0, 3.0]:
+                config = self.update_parameter("param_name", value)
+                path = self.save_config(config, f"param_name_{{value}}")
+                config_paths.append(path)
+                
+            return config_paths
         """
         raise NotImplementedError(
             "Необходимо реализовать метод generate_configs для эксперимента {experiment_name}!"
@@ -60,6 +76,9 @@ TEMPLATE_README = '''# {experiment_name}
 ## Description
 {description}
 
+## SLAM Version
+{slam_tag}
+
 ## Parameters
 {parameter_docs}
 
@@ -70,31 +89,188 @@ TEMPLATE_README = '''# {experiment_name}
 - Add any additional notes or observations here
 '''
 
-def sanitize_identifier(name: str) -> str:
-    """Преобразует строку в допустимый Python-идентификатор"""
-    # Заменяем пробелы на подчеркивания и удаляем недопустимые символы
-    identifier = re.sub(r'[^a-zA-Z0-9_]', '', name.replace(' ', '_'))
-    # Убеждаемся, что идентификатор начинается с буквы
-    if identifier and not identifier[0].isalpha():
-        identifier = 'exp_' + identifier
-    return identifier
+def is_english_letter(char: str) -> bool:
+    """
+    Проверяет, является ли символ английской буквой
+    
+    Args:
+        char: Проверяемый символ
+        
+    Returns:
+        True если символ - английская буква, False иначе
+    """
+    return char in string.ascii_letters
 
-def get_user_input(prompt: str, default: str = None, required: bool = False) -> str:
-    """Получает ввод от пользователя с опциональным значением по умолчанию"""
-    while True:
-        if default:
-            prompt = f"{prompt} [{default}]: "
+def is_pascal_case(text: str) -> bool:
+    """
+    Проверяет, соответствует ли текст PascalCase и содержит только английские буквы
+    
+    Args:
+        text: Проверяемый текст
+        
+    Returns:
+        True если текст в PascalCase и на английском, False иначе
+    """
+    # Проверяем что строка не пустая и начинается с большой буквы
+    if not text or not text[0].isupper():
+        return False
+    
+    # Проверяем что строка содержит только английские буквы и цифры
+    if not all(c.isdigit() or is_english_letter(c) for c in text):
+        return False
+    
+    # Проверяем что нет последовательных заглавных букв (кроме аббревиатур)
+    for i in range(1, len(text)-1):
+        if (text[i].isupper() and text[i+1].isupper() and 
+            not (text[i-1].isupper() and text[i+1].isupper())):
+            return False
+    
+    return True
+
+def pascal_to_snake(text: str) -> str:
+    """
+    Преобразует PascalCase в snake_case
+    
+    Args:
+        text: Текст в PascalCase
+        
+    Returns:
+        Текст в snake_case
+    """
+    result = text[0].lower()
+    for char in text[1:]:
+        if char.isupper():
+            result += '_' + char.lower()
         else:
-            prompt = f"{prompt}: "
+            result += char
+    return result
+
+
+def get_experiment_name() -> tuple[str, str]:
+    """
+    Получает название эксперимента от пользователя
+    
+    Returns:
+        Tuple[experiment_class, experiment_name]
+    """
+    while True:
+        name = get_user_input(
+            "Название эксперимента (в PascalCase, на английском, например: FeatureAnalysis)", 
+            required=True
+        )
         
-        response = input(prompt).strip()
-        
-        if not response and default:
-            return default
-        elif not response and required:
-            print("Это поле обязательно для заполнения. Пожалуйста, введите значение.")
+        if not is_pascal_case(name):
+            print("\nОшибка: Название должно быть в PascalCase и содержать только английские буквы!")
+            print("Примеры правильных названий:")
+            print("  - FeatureAnalysis")
+            print("  - OrbParameterTuning")
+            print("  - SemanticMapping")
+            print("  - SLAM2D")  # пример с аббревиатурой
             continue
-        return response
+            
+        experiment_class = name
+        experiment_name = pascal_to_snake(name)
+        
+        print(f"\nКласс эксперимента: {experiment_class}")
+        print(f"Имя эксперимента: {experiment_name}")
+        
+        if get_user_input("\nПодтвердить? (y/n)", "y").lower() == "y":
+            return experiment_class, experiment_name
+
+def get_available_slam_versions() -> Dict[str, str]:
+    """
+    Получает список доступных версий SLAM
+    Returns:
+        Dict[tag, description]
+    """
+    version_manager = SlamVersionManager("../slam")
+    versions = version_manager.get_all_versions()
+    return {v.tag: v.description for v in versions}
+
+def get_base_config(slam_tag: str) -> Optional[Dict]:
+    """
+    Получает базовый конфиг для версии SLAM из configs
+    """
+    config_path = os.path.join("configs", f"{slam_tag}.yaml")
+    try:
+        config_manager = ConfigManager(config_path)
+    except FileNotFoundError:
+        return None
+    return config_manager.load_base_config()
+
+def get_slam_tag() -> str:
+    """Получает тег версии SLAM от пользователя"""
+    versions = get_available_slam_versions()
+    
+    print("\n=== Выбор версии SLAM ===")
+    print("Доступные версии в git:")
+    for i, (tag, desc) in enumerate(versions.items(), 1):
+        print(f"  {i}. {tag} - {desc}")
+    
+    while True:
+        try:
+            choice = int(get_user_input("\nВыберите номер версии", "1"))
+            if 1 <= choice <= len(versions):
+                tag = list(versions.keys())[choice-1]
+                
+                # Проверяем наличие базового конфига
+                if not get_base_config(tag):
+                    print(f"\nОшибка: Не найден базовый конфиг для версии {tag}")
+                    print(f"Пожалуйста, добавьте файл {tag}.yaml в configs/")
+                    exit(1)
+                    
+                return tag
+                
+            print(f"Пожалуйста, выберите число от 1 до {len(versions)}")
+        except ValueError:
+            print("Пожалуйста, введите число")
+
+def get_experiment_parameters(slam_tag: str) -> Dict[str, str]:
+    """Получает параметры для эксперимента от пользователя"""
+    config = get_base_config(slam_tag)
+    parameters = {}
+    
+    # Показываем доступные параметры
+    print(f"\n=== Доступные параметры версии {slam_tag} ===")
+    param_list = [(key, str(value)) for key, value in config.items() 
+                  if isinstance(value, (int, float, str))]
+    
+    for i, (name, value) in enumerate(param_list, 1):
+        print(f"{i}. {name}")
+        print(f"   Текущее значение: {value}\n")
+    
+    # Выбор параметров
+    print("\nВведите номера параметров через пробел или запятую")
+    # print("0 - выбрать все параметры")
+    
+    while True:
+        try:
+            response = input("\nВыберите параметры: ").strip()
+            if not response:
+                break
+                
+            numbers = [int(n) for n in response.replace(',', ' ').split()]
+            
+            if 0 in numbers:
+                selected_params = param_list
+            else:
+                selected_params = [param_list[num-1] for num in numbers 
+                                 if 1 <= num <= len(param_list)]
+            
+            # Получаем значения для выбранных параметров
+            for name, current_value in selected_params:
+                values = get_user_input(
+                    f"Значения для {name} (текущее: {current_value})",
+                    f"{current_value}"
+                )
+                parameters[name] = values
+            
+            break
+                
+        except ValueError:
+            print("Ошибка: Введите номера через пробел или запятую")
+            
+    return parameters
 
 def get_datasets_input() -> List[str]:
     """Получает список датасетов от пользователя по номерам"""
@@ -111,7 +287,6 @@ def get_datasets_input() -> List[str]:
             numbers = [int(n) for n in re.split(r'[,\s]+', response)]
             
             if 0 in numbers:
-                # Если выбран 0, добавляем все датасеты
                 selected_datasets = list(AVAILABLE_DATASETS.values())
             else:
                 for num in numbers:
@@ -140,86 +315,62 @@ def get_datasets_input() -> List[str]:
     
     return selected_datasets
 
-def generate_parameter_iterations(parameters: dict) -> str:
-    """Генерирует код для итерации по параметрам"""
-    if not parameters:
-        return "pass"
-    
-    lines = []
-    for param_name, param_values in parameters.items():
-        lines.append(f"{param_name}_values = {param_values}")
-    
-    param_names = list(parameters.keys())
-    indent = "        "
-    
-    iterations = []
-    for i, param in enumerate(param_names):
-        iterations.append(f"{indent}{'    ' * i}for {param} in {param}_values:")
-    
-    return "\n".join(lines + iterations)
-
 def create_experiment():
     """Создает новый эксперимент на основе пользовательского ввода"""
     print("\n=== Создание нового эксперимента ===")
     
     # Получаем основную информацию
     while True:
-        exp_name = get_user_input("Название эксперимента (на английском)", required=True)
-        exp_id = sanitize_identifier(exp_name.lower())
+        # Получаем название эксперимента
+        exp_class, exp_name = get_experiment_name()
+        exp_id = exp_name  # используем snake_case версию как id
+        
+        # Проверяем существование директории
         exp_dir = os.path.join('experiments', exp_id)
-        
         if os.path.exists(exp_dir):
-            print(f"\nОшибка: Эксперимент с названием '{exp_name}' уже существует.")
+            print(f"\nОшибка: Эксперимент с именем '{exp_name}' уже существует.")
             print("Пожалуйста, выберите другое название.\n")
-            continue
+            return
         break
-        
-    exp_class = sanitize_identifier(exp_name) + 'Experiment'
     
+    exp_class = exp_class + 'Experiment'
     description = get_user_input("Описание эксперимента", required=True)
     
-    # Получаем параметры
-    print("\n=== Определение параметров эксперимента ===")
-    print("Введите параметры в формате:")
-    print("  Имя параметра: список значений (например: [1.0, 2.0, 3.0])")
-    print("Оставьте поле пустым для завершения\n")
-    
-    parameters = {}
-    while True:
-        param_name = get_user_input("Имя параметра")
-        if not param_name:
-            break
-        param_values = get_user_input(f"Значения для {param_name}", "[1.0, 2.0, 3.0]")
-        parameters[param_name] = param_values
-        print(f"Добавлен параметр: {param_name} = {param_values}\n")
+    # Получаем версию SLAM и параметры
+    slam_tag = get_slam_tag()
+    parameters = get_experiment_parameters(slam_tag)
     
     # Получаем список датасетов
     datasets = get_datasets_input()
     
-    # Создаем директорию эксперимента
+    # Создаем директории эксперимента
+    exp_dir = os.path.join('experiments', exp_id)
+    configs_dir = os.path.join(exp_dir, 'configs')
     os.makedirs(exp_dir, exist_ok=True)
+    os.makedirs(configs_dir, exist_ok=True)
     
     # Создаем __init__.py
     with open(os.path.join(exp_dir, '__init__.py'), 'w') as f:
         f.write('')
     
-    # Создаем generator.py с обновленным содержимым
+    # Создаем experiment.py
     parameter_docs = "\n        ".join([
         f"{param}: {values}" for param, values in parameters.items()
     ]) or "Нет параметров"
     
-    generator_content = TEMPLATE_GENERATOR.format(
+    experiment_content = TEMPLATE_EXPERIMENT.format(
         experiment_id=exp_id,
         experiment_class=exp_class,
         experiment_name=exp_name,
         description=description,
         parameters=parameters,
         parameter_docs=parameter_docs,
-        datasets=datasets
+        datasets=datasets,
+        slam_tag=slam_tag
     )
     
-    with open(os.path.join(exp_dir, 'generator.py'), 'w') as f:
-        f.write(generator_content)
+    with open(os.path.join(exp_dir, 'experiment.py'), 'w') as f:
+        f.write(experiment_content)
     
     # Создаем README.md
     parameter_docs = "\n".join([f"- `{param}`: {values}" 
@@ -227,10 +378,11 @@ def create_experiment():
     datasets_docs = "\n".join([f"- {dataset}" for dataset in datasets])
     
     readme_content = TEMPLATE_README.format(
-        experiment_name=exp_name,
+        experiment_name=exp_class,
         description=description,
         parameter_docs=parameter_docs or "No parameters defined",
-        datasets_docs=datasets_docs or "No datasets specified"
+        datasets_docs=datasets_docs or "No datasets specified",
+        slam_tag=slam_tag
     )
     
     with open(os.path.join(exp_dir, 'README.md'), 'w') as f:
@@ -240,11 +392,12 @@ def create_experiment():
     print(f"Директория: {exp_dir}")
     print("\nСозданные файлы:")
     print(f"  - {os.path.join(exp_dir, '__init__.py')}")
-    print(f"  - {os.path.join(exp_dir, 'generator.py')}")
+    print(f"  - {os.path.join(exp_dir, 'experiment.py')}")
     print(f"  - {os.path.join(exp_dir, 'README.md')}")
+    print(f"  - {os.path.join(exp_dir, 'configs')} (директория)")
     
     print("\nСледующие шаги:")
-    print("1. Реализуйте метод generate_configs в generator.py")
+    print("1. Реализуйте метод generate_configs в experiment.py")
     print("2. Метод должен генерировать YAML конфигурации для следующих параметров:")
     if parameters:
         for param, values in parameters.items():

@@ -1,7 +1,7 @@
 import os
 import importlib
-from .base import BaseExperiment, ExperimentMetadata
-from .registry import ExperimentRegistry
+from experiments.base import BaseExperiment, ExperimentMetadata
+from experiments.registry import ExperimentRegistry
 
 # Создаем единый реестр экспериментов
 registry = ExperimentRegistry()
@@ -9,9 +9,18 @@ registry = ExperimentRegistry()
 # Экспортируем декоратор для удобства использования
 register_experiment = registry.register
 
-# Автоматически импортируем все эксперименты
-def _import_experiments():
-    """Импортирует все модули экспериментов"""
+def _import_experiments() -> None:
+    """
+    Импортирует все модули экспериментов
+    
+    Структура директории:
+    experiments/
+        experiment_name/
+            __init__.py
+            experiment.py
+            configs/
+            README.md
+    """
     current_dir = os.path.dirname(__file__)
     
     for item in os.listdir(current_dir):
@@ -21,14 +30,22 @@ def _import_experiments():
         if item.startswith('__'):  # Пропускаем специальные директории
             continue
             
-        generator_path = os.path.join(current_dir, item, 'generator.py')
-        if os.path.exists(generator_path):
-            module_name = f"experiments.{item}.generator"
+        experiment_path = os.path.join(current_dir, item, 'experiment.py')
+        if os.path.exists(experiment_path):
+            module_name = f"experiments.{item}.experiment"
             try:
                 importlib.import_module(module_name)
-                print(f"Loaded experiment: {item}")
+                # print(f"Загружен эксперимент: {item}")
             except Exception as e:
-                print(f"Failed to load experiment {item}: {str(e)}")
+                print(f"Ошибка загрузки эксперимента {item}: {str(e)}")
 
 # Выполняем импорт при загрузке модуля
 _import_experiments()
+
+# Экспортируем для удобства использования
+__all__ = [
+    'BaseExperiment',
+    'ExperimentMetadata',
+    'register_experiment',
+    'registry'
+]

@@ -1,0 +1,34 @@
+%YAML:1.0
+
+Camera.RGB: 1
+Camera.fps: 20
+Camera.height: 776
+Camera.type: Rectified
+Camera.width: 1032
+Camera1.cx: 516.0
+Camera1.cy: 388.0
+Camera1.fx: 516.0
+Camera1.fy: 516.0
+File.version: '1.0'
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+ORBextractor.nFeatures: 2000
+ORBextractor.nLevels: 8
+ORBextractor.scaleFactor: 1.2
+Semantic.DropDynamic: 0
+Semantic.DropMoving: 0
+Semantic.UseInstance: 0
+Semantic.UseSemantic: 0
+Semantic.UseSemanticLoop: 0
+Stereo.ThDepth: 35.0
+Stereo.b: 0.52
+Viewer.CameraLineWidth: 3.0
+Viewer.CameraSize: 0.7
+Viewer.GraphLineWidth: 1.0
+Viewer.KeyFrameLineWidth: 2.0
+Viewer.KeyFrameSize: 0.6
+Viewer.PointSize: 2.0
+Viewer.ViewpointF: 2000.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -100.0
+Viewer.ViewpointZ: -0.1

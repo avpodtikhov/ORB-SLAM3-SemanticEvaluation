@@ -1,223 +1,259 @@
 import os
-import json
-import datetime
-from typing import List, Dict
+from pathlib import Path
+from typing import List, Optional, Dict
 from dotenv import load_dotenv
 from experiments import registry
-from utils.slam import run_experiment
+from utils.slam import SLAM
+from utils.version import SlamVersionManager
+from utils.config import ConfigManager
+from utils.functions import get_user_input
+import subprocess
 
+# Загружаем переменные окружения
 load_dotenv()
 
-required_env_vars = {
-    'ORB_SLAM_PATH': 'путь к исполняемому файлу ORB-SLAM',
-    'ORB_SLAM_VOCABULARY': 'путь к файлу словаря ORB-SLAM'
-}
-
-missing_vars = [
-    var for var, description in required_env_vars.items() 
-    if not os.getenv(var)
-]
-
-if missing_vars:
-    print("Ошибка: не найдены необходимые переменные окружения!")
-    print("Создайте файл .env в корневой директории проекта со следующими переменными:")
-    for var in missing_vars:
-        print(f"  {var}={required_env_vars[var]}")
-    exit(1)
-
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-
-ORB_PATH = os.getenv('ORB_SLAM_PATH')
-VOC_PATH = os.getenv('ORB_SLAM_VOCABULARY')
-
-def get_datasets() -> List[str]:
-    """Получение списка путей к наборам данных"""
-    return sorted([
-        os.path.join(DATA_DIR, d) for d in os.listdir(DATA_DIR)
-        if os.path.isdir(os.path.join(DATA_DIR, d))
-    ])
-
-def select_experiments() -> Dict[str, any]:
-    """Интерактивный выбор экспериментов для запуска"""
+def select_experiment() -> str:
+    """
+    Позволяет пользователю выбрать эксперимент из списка доступных
+    
+    Returns:
+        ID выбранного эксперимента
+    """
+    # Получаем все эксперименты
     experiments = registry.get_all_experiments()
     
     if not experiments:
-        print("Эксперименты не найдены!")
-        return {}
+        raise RuntimeError("Нет доступных экспериментов")
     
+    # Создаем упорядоченный список экспериментов
+    experiment_list = sorted(experiments.items())
+
     print("\nДоступные эксперименты:")
-    for i, (name, exp_class) in enumerate(experiments.items(), 1):
-        metadata = exp_class(os.path.join(PROJECT_ROOT, "experiments", name)).get_metadata()
-        print(f"{i}. {metadata.name}")
-        print(f"   Описание: {metadata.description.strip()}")
-        print(f"   Датасеты: {', '.join(metadata.datasets)}")
-        print(f"   Параметры: {metadata.parameters}\n")
-    
-    selected = {}
-    while True:
+    for idx, (exp_id, exp) in enumerate(experiment_list, 1):
         try:
-            response = input("Введите номера экспериментов через пробел (Enter для запуска всех): ").strip()
-            if not response:
-                return experiments
-            
-            numbers = [int(x) for x in response.split()]
-            if not all(1 <= n <= len(experiments) for n in numbers):
-                print("Некорректные номера экспериментов!")
-                continue
-                
-            selected = {
-                name: exp_class
-                for i, (name, exp_class) in enumerate(experiments.items(), 1)
-                if i in numbers
-            }
-            break
-            
+            # Получаем метаданные через метод экземпляра
+            metadata = exp.get_metadata()
+            print(f"\n{idx}. {exp_id}:")
+            print(f"  Описание: {' '.join(metadata.description.split())}")
+            print(f"  Версия SLAM: {metadata.default_slam_tag}")
+            print(f"  Датасеты: {', '.join(metadata.datasets)}")
+        except Exception as e:
+            print(f"\n{idx}. {exp_id}: Ошибка получения метаданных - {str(e)}")
+    
+    while True:
+        choice = input("\nВыберите эксперимент (номер или ID): ").strip()
+        
+        # Пробуем интерпретировать как номер
+        try:
+            idx = int(choice)
+            if 1 <= idx <= len(experiment_list):
+                return experiment_list[idx-1][0]
+            print(f"Номер должен быть от 1 до {len(experiment_list)}")
+            continue
         except ValueError:
-            print("Пожалуйста, введите числа через пробел")
-    
-    return selected
+            # Если не номер, проверяем как ID
+            if choice in experiments:
+                return choice
+            print("Некорректный номер или ID эксперимента")
 
-def get_version_info() -> dict:
-    """Получает информацию о версии от пользователя"""
-    print("\nИнформация о версии ORB-SLAM:")
-    
-    # Спрашиваем об изменениях
-    while True:
-        changed = input("Были ли изменения в ORB-SLAM? (y/n): ").lower().strip()
-        if changed in ('y', 'n'):
-            break
-        print("Пожалуйста, введите 'y' или 'n'")
-    
-    if changed == 'n':
-        return {
-            "version_tag": "base",
-            "description": "Базовая версия ORB-SLAM без изменений",
-            "changes": False,
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-    
-    # Получаем информацию об изменениях
-    while True:
-        version_tag = input("Введите тег версии (например, 'fast_matching' или 'opt_ba'): ").strip()
-        if version_tag and version_tag.replace('_', '').isalnum():
-            break
-        print("Тег должен содержать только буквы, цифры и знаки подчеркивания")
-    
-    description = input("Краткое описание изменений: ").strip()
-    while not description:
-        print("Описание не может быть пустым")
-        description = input("Краткое описание изменений: ").strip()
-    
-    return {
-        "version_tag": version_tag,
-        "description": description,
-        "changes": True,
-        "timestamp": datetime.datetime.now().isoformat()
-    }
-
-def create_version_dir(exp_name: str, version_info: dict) -> str:
+def verify_slam_version(experiment_id: str) -> None:
     """
-    Создает новую версию директории для результатов эксперимента
+    Проверяет соответствие версии SLAM для эксперимента
     
     Args:
-        exp_name: Имя эксперимента
-        version_info: Информация о версии ORB-SLAM
-    
-    Returns:
-        str: Путь к созданной директории
+        experiment_id: ID эксперимента
+        
+    Raises:
+        RuntimeError: Если версия не соответствует или есть несохраненные изменения
     """
-    base_dir = os.path.join(RESULTS_DIR, exp_name)
+    # Получаем путь к репозиторию SLAM
+    slam_repo = os.getenv('ORB_SLAM_REPO')
+    if not slam_repo:
+        raise ValueError(
+            "Не указан путь к репозиторию SLAM. "
+            "Укажите в .env (ORB_SLAM_REPO)."
+        )
     
-    # Создаем директорию версии
-    version_tag = version_info['version_tag']
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    version_dir = os.path.join(base_dir, f"{version_tag}_{timestamp}")
+    # Получаем требуемую версию из метаданных эксперимента
+    experiment = registry.get_experiment(experiment_id)
+    metadata = experiment.get_metadata()
+    required_version = metadata.default_slam_tag
     
-    os.makedirs(version_dir, exist_ok=True)
-    
-    # Создаем символическую ссылку latest
-    latest_link = os.path.join(base_dir, "latest")
-    if os.path.exists(latest_link):
-        os.remove(latest_link)
-    os.symlink(version_dir, latest_link)
-    
-    return version_dir
+    # Проверяем версию
+    version_manager = SlamVersionManager(slam_repo)
+    if not version_manager.verify_version(required_version):
+        state = version_manager.get_current_state()
+        raise RuntimeError(
+            f"Версия SLAM не соответствует требуемой ({required_version})\n"
+            f"Текущий коммит: {state.get('commit', 'неизвестно')}\n"
+            f"Есть изменения: {'да' if state.get('has_changes') else 'нет'}"
+        )
 
-def run_experiments():
-    """Запуск выбранных экспериментов"""
-    # Проверяем существование файлов
-    if not os.path.exists(ORB_PATH):
-        print(f"Ошибка: не найден исполняемый файл ORB-SLAM по пути: {ORB_PATH}")
-        return
+def build_slam(repo_path: str) -> None:
+    """
+    Собирает ORB-SLAM
     
-    if not os.path.exists(VOC_PATH):
-        print(f"Ошибка: не найден файл словаря ORB-SLAM по пути: {VOC_PATH}")
-        return
-    
-    # Получаем информацию о версии
-    version_info = get_version_info()
-    
-    experiments = select_experiments()
-    if not experiments:
-        return
+    Args:
+        repo_path: Путь к репозиторию SLAM
         
-    print(f"\nЗапуск {len(experiments)} экспериментов: {list(experiments.keys())}")
-    print(f"Используется ORB-SLAM: {ORB_PATH}")
-    print(f"Версия: {version_info['version_tag']}")
-    if version_info['changes']:
-        print(f"Изменения: {version_info['description']}")
-    
-    datasets = get_datasets()
-    
-    for exp_name, exp_class in experiments.items():
-        exp_path = os.path.join(PROJECT_ROOT, "experiments", exp_name)
-        experiment = exp_class(exp_path)
-        metadata = experiment.get_metadata()
+    Raises:
+        RuntimeError: Если сборка завершилась с ошибкой
+    """
+    try:
+        print("\nНачинаем сборку ORB-SLAM...")
+        build_script = os.path.join(repo_path, 'build.sh')
         
-        print(f"\nЗапуск эксперимента: {metadata.name}")
-        print(f"Описание: {metadata.description.strip()}")
+        # Проверяем наличие скрипта сборки
+        if not os.path.exists(build_script):
+            raise RuntimeError(f"Скрипт сборки не найден: {build_script}")
         
-        # Генерируем конфигурации
-        print("Генерация конфигураций...")
-        experiment.generate_configs()
+        # Делаем скрипт исполняемым
+        os.chmod(build_script, 0o755)
         
-        # Получаем список конфигураций
-        configs_dir = os.path.join(exp_path, "configs")
-        configs = sorted([
-            os.path.join(configs_dir, f) 
-            for f in os.listdir(configs_dir) 
-            if f.endswith('.yaml')
-        ])
-        
-        # Создаем новую версию директории для результатов
-        output_path = create_version_dir(exp_name, version_info)
-        
-        # Сохраняем метаданные и информацию о версии
-        version_info.update({
-            "metadata": metadata.__dict__,
-            "configs_count": len(configs),
-            "datasets": metadata.datasets
-        })
-        
-        with open(os.path.join(output_path, "version_info.json"), 'w') as f:
-            json.dump(version_info, f, indent=2, ensure_ascii=False)
-        
-        print(f"Конфигураций для запуска: {len(configs)}")
-        print(f"Датасетов для тестирования: {len(metadata.datasets)}")
-        
-        # Запускаем эксперимент
-        run_experiment(
-            orb_path=ORB_PATH,
-            voc_path=VOC_PATH,
-            experiment_configs=configs,
-            datasets=datasets,
-            base_output_path=output_path
+        # Запускаем сборку
+        process = subprocess.run(
+            ['./build.sh'],
+            cwd=repo_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
         )
         
-        print(f"Эксперимент {metadata.name} завершен!")
-        print(f"Результаты сохранены в: {output_path}")
+        if process.returncode != 0:
+            raise RuntimeError(
+                f"Ошибка при сборке (код {process.returncode}):\n{process.stdout}"
+            )
+            
+        print("Сборка успешно завершена")
+        
+    except subprocess.SubprocessError as e:
+        raise RuntimeError(f"Ошибка при выполнении сборки: {str(e)}")
 
-if __name__ == "__main__":
-    run_experiments()
+def verify_and_prepare_slam(experiment_id: str) -> None:
+    """
+    Проверяет версию SLAM и при необходимости выполняет сборку
+    
+    Args:
+        experiment_id: ID эксперимента
+    """
+    # Получаем пути из .env
+    repo_path = os.getenv('ORB_SLAM_REPO')
+    orb_path = os.path.join(repo_path, os.getenv('ORB_SLAM_PATH'))
+    
+    if not repo_path:
+        raise ValueError("Не указан путь к репозиторию SLAM в .env (ORB_SLAM_REPO)")
+    
+    # Проверяем версию
+    version_manager = SlamVersionManager(repo_path)
+    experiment = registry.get_experiment(experiment_id)
+    metadata = experiment.get_metadata()
+    required_version = metadata.default_slam_tag
+    
+    if not version_manager.verify_version(required_version):
+        state = version_manager.get_current_state()
+        raise RuntimeError(
+            f"Версия SLAM не соответствует требуемой ({required_version})\n"
+            f"Текущий коммит: {state.get('commit', 'неизвестно')}\n"
+            f"Есть изменения: {'да' if state.get('has_changes') else 'нет'}"
+        )
+    
+    # Проверяем наличие исполняемого файла
+    if not os.path.exists(orb_path):
+        print(f"\nИсполняемый файл не найден: {orb_path}")
+        build_slam(repo_path)
+
+
+def run_experiment(
+    experiment_id: str,
+    output_dir: Optional[str] = None,
+    max_workers: Optional[int] = None
+) -> None:
+    """
+    Запускает эксперимент
+    
+    Args:
+        experiment_id: ID эксперимента
+        output_dir: Директория для результатов
+        max_workers: Максимальное количество параллельных процессов
+    """
+    # Проверяем версию SLAM
+    verify_slam_version(experiment_id)
+    
+    # Получаем пути из .env
+    orb_path = os.path.join(os.getenv('ORB_SLAM_REPO'), os.getenv('ORB_SLAM_PATH'))
+    voc_path = os.getenv('ORB_SLAM_VOC')
+    datasets_dir = os.getenv('DATASETS_DIR')
+    
+    # Проверяем наличие необходимых путей
+    if not orb_path:
+        raise ValueError("Не указан путь к ORB-SLAM в .env (ORB_SLAM_PATH)")
+    if not voc_path:
+        raise ValueError("Не указан путь к словарю в .env (ORB_SLAM_VOC)")
+    if not datasets_dir:
+        raise ValueError("Не указана директория с датасетами в .env (DATASETS_DIR)")
+    
+    # Получаем эксперимент и метаданные
+    experiment = registry.get_experiment(experiment_id)
+    metadata = experiment.get_metadata()
+    
+    # Генерируем конфиги
+    config_paths = experiment.generate_configs()
+    print(f"\nСгенерировано {len(config_paths)} конфигураций")
+    
+    # Формируем пути к датасетам
+    datasets = [
+        os.path.join(datasets_dir, dataset)
+        for dataset in metadata.datasets
+    ]
+    
+    # Проверяем существование датасетов
+    for dataset in datasets:
+        if not os.path.exists(dataset):
+            raise FileNotFoundError(f"Датасет не найден: {dataset}")
+    
+    # Определяем директорию для результатов
+    if output_dir is None:
+        output_dir = os.path.join('experiments', experiment_id, 'results')
+    
+    # Создаем SLAM с путями из .env
+    slam = SLAM(orb_path=orb_path, voc_path=voc_path)
+    
+    # Запускаем эксперимент
+    slam.run_experiment(
+        configs=config_paths,
+        datasets=datasets,
+        output_path=output_dir,
+        max_workers=max_workers
+    )
+
+def main():
+    try:
+        # Выбор эксперимента
+        experiment_id = select_experiment()
+        
+        # Формируем путь по умолчанию для результатов
+        default_output_dir = os.path.join('experiments', experiment_id, 'results')
+        
+        # Запрос директории для результатов
+        output_dir = input(
+            f"\nДиректория для результатов "
+            f"[{default_output_dir}]: "
+        ).strip()
+        output_dir = output_dir if output_dir else default_output_dir
+        
+        # Запрос количества процессов
+        default_workers = os.getenv('MAX_WORKERS', '6')
+        max_workers = input(
+            f"\nКоличество процессов [{default_workers}]: "
+        ).strip()
+        max_workers = int(max_workers) if max_workers else int(default_workers)
+        
+        # Запуск эксперимента
+        run_experiment(experiment_id, output_dir, max_workers)
+        
+    except Exception as e:
+        print(f"\nОшибка: {str(e)}")
+        exit(1)
+
+if __name__ == '__main__':
+    main()

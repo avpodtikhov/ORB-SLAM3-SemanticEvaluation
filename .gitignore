@@ -94,7 +94,7 @@ borrar/*
 
 */ExecMean.txt
 
-*.txt
+# *.txt
 
 
 .vscode/
@@ -104,3 +104,6 @@ borrar/*
 .env
 
 .DS_Store
+
+*.pyc
+**/__pycache__/

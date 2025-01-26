@@ -60,3 +60,20 @@ Viewer.ViewpointX: 0.0
 Viewer.ViewpointY: -100.0
 Viewer.ViewpointZ: -0.1
 Viewer.ViewpointF: 2000.0
+
+#--------------------------------------------------------------------------------------------
+# Semantic Parameters
+#--------------------------------------------------------------------------------------------
+# Drop objects, which are moving
+Semantic.DropMoving: 0
+# Drop objects, which are potentially moving (Vehicles, Pedestrians)
+Semantic.DropDynamic: 0
+# Use semantic segmentation segmentation to assign points
+Semantic.UseSemantic: 0
+# Use instance segmentation to assign points
+Semantic.UseInstance: 0
+# Use semantic to improve loop closure
+Semantic.UseSemanticLoop: 0
+#--------------------------------------------------------------------------------------------
+# Evaluation Parameters
+#--------------------------------------------------------------------------------------------
