@@ -145,3 +145,7 @@ utils/version.py - работа с версиями SLAM
 utils/config.py - операции с конфигурациями
 utils/slam.py - запуск SLAM и сбор результатов
 Структура результатов:
+
+
+Данные из симулятора Carla:
+https://disk.yandex.ru/d/Esc6tFcEpP7Beg
