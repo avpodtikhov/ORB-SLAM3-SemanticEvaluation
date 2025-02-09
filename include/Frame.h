@@ -38,16 +38,23 @@
 #include "Eigen/Core"
 #include "sophus/se3.hpp"
 
+#include "LineExtractor.h"
+#include <line_descriptor_custom.hpp>
+#include <line_descriptor/descriptor_custom.hpp>
+#include "gridStructure.h"
+
 namespace ORB_SLAM3
 {
 #define FRAME_GRID_ROWS 48
 #define FRAME_GRID_COLS 64
 
     class MapPoint;
+    class MapLine;
     class KeyFrame;
     class ConstraintPoseImu;
     class GeometricCamera;
     class ORBextractor;
+    class LineExtractor;
 
     class Frame
     {
@@ -61,6 +68,9 @@ namespace ORB_SLAM3
         Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
 
         // Constructor for stereo cameras with semantic.
+        Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight, LineExtractor* LineExtractorLeft, LineExtractor* LineExtractorRight, ORBVocabulary *voc, LineVocabulary* voc_line, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), const bool moving_flag = false, const bool dynamic_flag = false, const bool semantic_flag = false, const bool instance_flag = false);
+
+        // Constructor for stereo cameras with semantic and lines.
         Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), const bool moving_flag = false, const bool dynamic_flag = false, const bool semantic_flag = false, const bool instance_flag = false);
 
         // Constructor for RGB-D cameras.
@@ -75,6 +85,8 @@ namespace ORB_SLAM3
         // Extract ORB on the image. 0 for left image and 1 for right image.
         void ExtractORB(int flag, const cv::Mat &im, const int x0, const int x1);
         void ExtractORBSem(int flag, const cv::Mat &im, const int x0, const int x1, const cv::Mat &imSem);
+        // Extract lines on the image. 0 for left image and 1 for right image.
+        void ExtractLine(int flag, const cv::Mat &im);
 
         // Compute Bag of Words representation.
         void ComputeBoW();
@@ -104,6 +116,8 @@ namespace ORB_SLAM3
         // Check if a MapPoint is in the frustum of the camera
         // and fill variables of the MapPoint to be used by the tracking
         bool isInFrustum(MapPoint *pMP, float viewingCosLimit);
+        // Check if a MapLine is in the frustum of the camera
+        bool isInFrustumLine(MapLine *pML, float viewingCosLimit);
 
         bool ProjectPointDistort(MapPoint *pMP, cv::Point2f &kp, float &u, float &v);
 
@@ -118,11 +132,19 @@ namespace ORB_SLAM3
         // If there is a match, depth is computed and the right coordinate associated to the left keypoint is stored.
         void ComputeStereoMatches();
 
+        // Compute stereo matches for lines
+        void ComputeStereoMatches_Lines();
+        float lineSegmentOverlapStereo(float spl_obs, float epl_obs, float spl_proj, float epl_proj);
+        void filterLineSegmentDisparity( Eigen::Vector2f spl, Eigen::Vector2f epl, Eigen::Vector2f spr, Eigen::Vector2f epr, float &disp_s, float &disp_e );
+
+
         // Associate a "right" coordinate to a keypoint if there is valid depth in the depthmap.
         void ComputeStereoFromRGBD(const cv::Mat &imDepth);
 
         // Backprojects a keypoint (if stereo/depth info available) into 3D world coordinates.
         bool UnprojectStereo(const int &i, Eigen::Vector3f &x3D);
+        // Backprojects a line segment (if stereo/depth info available) into 3D world coordinates.
+        bool UnprojectStereoLines(const int &i, Eigen::Vector3f &x3D_start, Eigen::Vector3f &x3D_end);
 
         ConstraintPoseImu *mpcpi;
 
@@ -312,9 +334,22 @@ namespace ORB_SLAM3
 #ifdef REGISTER_TIMES
         double mTimeORB_Ext;
         double mTimeStereoMatch;
+        double mTimeLine_Ext;
+        double mTimeStereoMatch_Lines;
 #endif
 
     private:
+        // Helper function for copy construction
+        void copyPoseData(const Frame& frame);
+        void copyCameraParameters(const Frame& frame);
+        void copyFeatureExtractors(const Frame& frame);
+        void copyPointFeatures(const Frame& frame);
+        void copyLineFeatures(const Frame& frame);
+        void copyScaleParameters(const Frame& frame);
+        void copySemanticData(const Frame& frame);
+        void copyIMUData(const Frame& frame);
+        void copyBoWData(const Frame& frame);
+
         // Undistort keypoints given OpenCV distortion parameters.
         // Only for the RGB-D case. Stereo must be already rectified!
         // (called in the constructor).
@@ -325,6 +360,10 @@ namespace ORB_SLAM3
 
         // Assign keypoints to the grid for speed up feature matching (called in the constructor).
         void AssignFeaturesToGrid();
+
+        // Semantic processing methods
+        void processSemanticKeyPoints(const cv::Mat &imLeftSem, bool dynamic_flag = false);
+        void updateSemanticInfo(const cv::KeyPoint &kp, const cv::Mat &imLeftSem);
 
         bool mbIsSet;
 

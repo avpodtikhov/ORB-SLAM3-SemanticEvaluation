@@ -31,6 +31,9 @@
 #include <include/CameraModels/Pinhole.h>
 #include <include/CameraModels/KannalaBrandt8.h>
 
+#include "MapLine.h"
+#include "LineMatcher.h"
+
 namespace ORB_SLAM3
 {
 
@@ -48,31 +51,136 @@ namespace ORB_SLAM3
 #ifdef REGISTER_TIMES
         mTimeStereoMatch = 0;
         mTimeORB_Ext = 0;
+        mTimeLine_Ext = 0;
+        mTimeStereoMatch_Lines = 0;
 #endif
+    }
+    void Frame::copyPoseData(const Frame& frame) {
+        mTcw = frame.mTcw;
+        mTlr = frame.mTlr;
+        mTrl = frame.mTrl;
+        mRlr = frame.mRlr;
+        mtlr = frame.mtlr;
+        mbHasPose = false;
+        mbHasVelocity = false;
+        mVw = frame.mVw;
+    }
+
+    void Frame::copyCameraParameters(const Frame& frame) {
+        mK = frame.mK.clone();
+        mK_ = Converter::toMatrix3f(frame.mK);
+        mDistCoef = frame.mDistCoef.clone();
+        mbf = frame.mbf;
+        mb = frame.mb;
+        mThDepth = frame.mThDepth;
+        mpCamera = frame.mpCamera;
+        mpCamera2 = frame.mpCamera2;
+    }
+
+    void Frame::copyFeatureExtractors(const Frame& frame) {
+        mpORBvocabulary = frame.mpORBvocabulary;
+        mpORBextractorLeft = frame.mpORBextractorLeft;
+        mpORBextractorRight = frame.mpORBextractorRight;
+        mpLineVocabulary = frame.mpLineVocabulary;
+        mpLineExtractorLeft = frame.mpLineExtractorLeft;
+        mpLineExtractorRight = frame.mpLineExtractorRight;
+        mTimeStamp = frame.mTimeStamp;
+    }
+
+    void Frame::copyPointFeatures(const Frame& frame) {
+        N = frame.N;
+        mvKeys = frame.mvKeys;
+        mvKeysRight = frame.mvKeysRight;
+        mvKeysUn = frame.mvKeysUn;
+        mvpMapPoints = frame.mvpMapPoints;
+        mvuRight = frame.mvuRight;
+        mvDepth = frame.mvDepth;
+        mDescriptors = frame.mDescriptors.clone();
+        mDescriptorsRight = frame.mDescriptorsRight.clone();
+        mvbOutlier = frame.mvbOutlier;
+        mnCloseMPs = frame.mnCloseMPs;
+    }
+
+    void Frame::copyLineFeatures(const Frame& frame) {
+        N_Lines = frame.N_Lines;
+        mvKeysLine = frame.mvKeysLine;
+        mvKeysLineRight = frame.mvKeysLineRight;
+        mvKeysUnLines = frame.mvKeysUnLines;
+        mvpMapLines = frame.mvpMapLines;
+        mvDepthLine = frame.mvDepthLine;
+        mDescriptorsLine = frame.mDescriptorsLine.clone();
+        mDescriptorsLineRight = frame.mDescriptorsLineRight.clone();
+        mvbOutlierLine = frame.mvbOutlierLine;
+        mnCloseMLs = frame.mnCloseMLs;
+        mvle_Lines = frame.mvle_Lines;
+    }
+
+    void Frame::copyScaleParameters(const Frame& frame) {
+        mnScaleLevels = frame.mnScaleLevels;
+        mnScaleLevelsLine = frame.mnScaleLevelsLine;
+        mfScaleFactor = frame.mfScaleFactor;
+        mfLogScaleFactor = frame.mfLogScaleFactor;
+        mvScaleFactors = frame.mvScaleFactors;
+        mvScaleFactorsLine = frame.mvScaleFactorsLine;
+        mvInvScaleFactors = frame.mvInvScaleFactors;
+        mvInvScaleFactorsLine = frame.mvInvScaleFactorsLine;
+        mvLevelSigma2 = frame.mvLevelSigma2;
+        mvLevelSigma2Line = frame.mvLevelSigma2Line;
+        mvInvLevelSigma2 = frame.mvInvLevelSigma2;
+        mvInvLevelSigma2Line = frame.mvInvLevelSigma2Line;
+    }
+
+    void Frame::copySemanticData(const Frame& frame) {
+        mvKeysMoving = frame.mvKeysMoving;
+        mvSemanticCls = frame.mvSemanticCls;
+        mvInstanceCls = frame.mvInstanceCls;
+        semantic_meta = frame.semantic_meta;
+    }
+
+    void Frame::copyIMUData(const Frame& frame) {
+        mImuBias = frame.mImuBias;
+        mImuCalib = frame.mImuCalib;
+        mpImuPreintegrated = frame.mpImuPreintegrated;
+        mpLastKeyFrame = frame.mpLastKeyFrame;
+        mpPrevFrame = frame.mpPrevFrame;
+        mpImuPreintegratedFrame = frame.mpImuPreintegratedFrame;
+        mbImuPreintegrated = frame.mbImuPreintegrated;
+        mpMutexImu = frame.mpMutexImu;
+    }
+
+    void Frame::copyBoWData(const Frame& frame) {
+        mBowVec = frame.mBowVec;
+        mFeatVec = frame.mFeatVec;
+        mpcpi = frame.mpcpi;
+        mnId = frame.mnId;
+        mpReferenceKF = frame.mpReferenceKF;
+        mNameFile = frame.mNameFile;
+        mnDataset = frame.mnDataset;
+        mbIsSet = frame.mbIsSet;
+        Nleft = frame.Nleft;
+        Nright = frame.Nright;
+        monoLeft = frame.monoLeft;
+        monoRight = frame.monoRight;
+        mvLeftToRightMatch = frame.mvLeftToRightMatch;
+        mvRightToLeftMatch = frame.mvRightToLeftMatch;
+        mvStereo3Dpoints = frame.mvStereo3Dpoints;
+        inv_width = frame.inv_width;
+        inv_height = frame.inv_height;
     }
 
     // Copy Constructor
     Frame::Frame(const Frame &frame)
-        : mpcpi(frame.mpcpi), mTcw(frame.mTcw), mbHasPose(false), mTlr(frame.mTlr),
-          mTrl(frame.mTrl), mRlr(frame.mRlr), mtlr(frame.mtlr), mbHasVelocity(false),
-          mpORBvocabulary(frame.mpORBvocabulary), mpORBextractorLeft(frame.mpORBextractorLeft), mpORBextractorRight(frame.mpORBextractorRight), mTimeStamp(frame.mTimeStamp), mK(frame.mK.clone()),
-          mK_(Converter::toMatrix3f(frame.mK)), mDistCoef(frame.mDistCoef.clone()), mbf(frame.mbf),
-          mb(frame.mb), mThDepth(frame.mThDepth), N(frame.N),
-          mvKeysMoving(frame.mvKeysMoving), mvSemanticCls(frame.mvSemanticCls),
-          mvInstanceCls(frame.mvInstanceCls), semantic_meta(frame.semantic_meta), mvKeys(frame.mvKeys), mvKeysRight(frame.mvKeysRight),
-          mvKeysUn(frame.mvKeysUn), mvpMapPoints(frame.mvpMapPoints), mvuRight(frame.mvuRight),
-          mvDepth(frame.mvDepth), mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec),
-          mDescriptors(frame.mDescriptors.clone()), mDescriptorsRight(frame.mDescriptorsRight.clone()),
-          mvbOutlier(frame.mvbOutlier), mnCloseMPs(frame.mnCloseMPs), mImuBias(frame.mImuBias), mImuCalib(frame.mImuCalib),
-          mpImuPreintegrated(frame.mpImuPreintegrated), mpLastKeyFrame(frame.mpLastKeyFrame), mpPrevFrame(frame.mpPrevFrame), mpImuPreintegratedFrame(frame.mpImuPreintegratedFrame),
-          mnId(frame.mnId), mpReferenceKF(frame.mpReferenceKF), mnScaleLevels(frame.mnScaleLevels),
-          mfScaleFactor(frame.mfScaleFactor), mfLogScaleFactor(frame.mfLogScaleFactor), mvScaleFactors(frame.mvScaleFactors), mvInvScaleFactors(frame.mvInvScaleFactors),
-          mvLevelSigma2(frame.mvLevelSigma2), mvInvLevelSigma2(frame.mvInvLevelSigma2), mNameFile(frame.mNameFile),
-          mnDataset(frame.mnDataset), mbIsSet(frame.mbIsSet),
-          mbImuPreintegrated(frame.mbImuPreintegrated), mpMutexImu(frame.mpMutexImu), mpCamera(frame.mpCamera), mpCamera2(frame.mpCamera2),
-          Nleft(frame.Nleft), Nright(frame.Nright), monoLeft(frame.monoLeft), monoRight(frame.monoRight), mvLeftToRightMatch(frame.mvLeftToRightMatch), mvRightToLeftMatch(frame.mvRightToLeftMatch),
-          mvStereo3Dpoints(frame.mvStereo3Dpoints)
     {
+        copyPoseData(frame);
+        copyCameraParameters(frame);
+        copyFeatureExtractors(frame);
+        copyPointFeatures(frame);
+        copyLineFeatures(frame);
+        copyScaleParameters(frame);
+        copySemanticData(frame);
+        copyIMUData(frame);
+        copyBoWData(frame);
+
         for (int i = 0; i < FRAME_GRID_COLS; i++)
             for (int j = 0; j < FRAME_GRID_ROWS; j++)
             {
@@ -97,6 +205,8 @@ namespace ORB_SLAM3
 #ifdef REGISTER_TIMES
         mTimeStereoMatch = frame.mTimeStereoMatch;
         mTimeORB_Ext = frame.mTimeORB_Ext;
+        mTimeLine_Ext = frame.mTimeLine_Ext;
+        mTimeStereoMatch_Lines = frame.mTimeStereoMatch_Lines;
 #endif
     }
 
@@ -201,6 +311,8 @@ namespace ORB_SLAM3
           mbf(bf), mThDepth(thDepth), mImuCalib(ImuCalib), mpImuPreintegrated(nullptr), mpPrevFrame(pPrevF), mpImuPreintegratedFrame(nullptr), mpReferenceKF(static_cast<KeyFrame *>(nullptr)),
           mbIsSet(false), mbImuPreintegrated(false), mpCamera(pCamera), mpCamera2(nullptr)
     {
+        inv_width  = FRAME_GRID_COLS / static_cast<double>(imLeft.cols);
+        inv_height = FRAME_GRID_ROWS / static_cast<double>(imRight.rows);
         semantic_meta = seg_meta;
         // Frame ID
         mnId = nNextId++;
@@ -228,83 +340,8 @@ namespace ORB_SLAM3
 
         mTimeORB_Ext = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndExtORB - time_StartExtORB).count();
 #endif
-        bool flag = false;
 
-       if (dynamic_flag)
-         {
-             std::vector<cv::KeyPoint> KeysClear;
-             cv::Mat DescriptorsClear;
-             for (auto & mvKey : mvKeys)
-             {
-                 flag = false;
-                 for (int i1 = -5; i1 < 6; i1++)
-                 {
-                     for (int i2 = -5; i2 < 6; i2++)
-                     {
-                         if (((int)mvKey.pt.x + i1 < 0) || ((int)mvKey.pt.x + i1 >= imLeft.rows))
-                         {
-                             continue;
-                         }
-                         if (((int)mvKey.pt.y + i2 < 0) || ((int)mvKey.pt.y + i2 >= imLeft.cols))
-                         {
-                             continue;
-                         }
-                         int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKey.pt.x + i1, (int)mvKey.pt.y + i2)))[0];
-                         if ((cls == 4) || (cls == 10))
-                         {
-                             flag = true;
-                             break;
-                         }
-                     }
-                     if (flag)
-                     {
-                         break;
-                     }
-                 }
-                 if (!flag)
-                 {
-                     KeysClear.push_back(mvKey);
-                 }
-             }
-
-             DescriptorsClear.create(KeysClear.size(), 32, CV_8U);
-             int j = 0;
-             for (int i = 0; i < mvKeys.size(); i++)
-             {
-                 flag = false;
-                 for (int i1 = -5; i1 < 6; i1++)
-                 {
-                     for (int i2 = -5; i2 < 6; i2++)
-                     {
-                         if (((int)mvKeys[i].pt.x + i1 < 0) || ((int)mvKeys[i].pt.x + i1 >= imLeft.rows))
-                         {
-                             continue;
-                         }
-                         if (((int)mvKeys[i].pt.y + i2 < 0) || ((int)mvKeys[i].pt.y + i2 >= imLeft.cols))
-                         {
-                             continue;
-                         }
-                         int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKeys[i].pt.x + i1, (int)mvKeys[i].pt.y + i2)))[0];
-                         if ((cls == 4) || (cls == 10))
-                         {
-                             flag = true;
-                             break;
-                         }
-                     }
-                     if (flag)
-                     {
-                         break;
-                     }
-                 }
-                 if (!flag)
-                 {
-                     mDescriptors.row(i).copyTo(DescriptorsClear.row(j));
-                     j += 1;
-                 }
-             }
-             mvKeys = KeysClear;
-             mDescriptors = DescriptorsClear;
-         }
+        processSemanticKeyPoints(imLeftSem, dynamic_flag);
 
         N = mvKeys.size();
         if (mvKeys.empty())
@@ -330,67 +367,161 @@ namespace ORB_SLAM3
         mvbOutlier = vector<bool>(N, false);
         mmProjectPoints.clear();
         mmMatchedInImage.clear();
+        
         mvSemanticCls = vector<int>(N, 0);
         mvInstanceCls = vector<int>(N, 0);
         mvKeysMoving = vector<bool>(N, false);
-        for (int i = 0; i < mvKeys.size(); i++)
+
+        for (int i = 0; i < mvKeys.size(); i++) {
+            updateSemanticInfo(mvKeys[i], imLeftSem);
+        }
+
+        // This is done only for the first Frame (or after a change in the calibration)
+        if (mbInitialComputations)
         {
-             flag = false;
-             for (int i1 = -5; i1 < 6; i1++)
-             {
-                 for (int i2 = -5; i2 < 6; i2++)
-                 {
-                     if (((int)mvKeys[i].pt.x + i1 < 0) || ((int)mvKeys[i].pt.x + i1 >= imLeft.rows))
-                     {
-                         continue;
-                     }
-                     if (((int)mvKeys[i].pt.y + i2 < 0) || ((int)mvKeys[i].pt.y + i2 >= imLeft.cols))
-                     {
-                         continue;
-                     }
-                     int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKeys[i].pt.x + i1, (int)mvKeys[i].pt.y + i2)))[0];
-                     if ((cls == 4) || (cls == 10))
-                     {
-                         flag = true;
-                         int instance_cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKeys[i].pt.x + i1, (int)mvKeys[i].pt.y + i2))[1]) * 1000 + (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKeys[i].pt.x + i1, (int)mvKeys[i].pt.y + i2)))[2];
-                         mvSemanticCls[i] = cls;
-                         mvInstanceCls[i] = instance_cls;
-                         if ((semantic_meta.find(instance_cls) != semantic_meta.end()) && semantic_meta[instance_cls])
-                         {
-                             mvKeysMoving[i] = true;
-                         }
-                         break;
-                     }
-                 }
-                 if (flag)
-                 {
-                     break;
-                 }
-             }
-             if (!flag)
-             {
-                 int instance_cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKeys[i].pt.x, (int)mvKeys[i].pt.y))[1]) * 1000 + (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKeys[i].pt.x, (int)mvKeys[i].pt.y)))[2];
-                 int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKeys[i].pt.x, (int)mvKeys[i].pt.y))[0]);
-                 mvSemanticCls[i] = cls;
-                 mvInstanceCls[i] = instance_cls;
-             }
-         }
-        // if (semantic_flag)
-        // {
-        //     for (int i = 0; i < mvKeys.size(); i++)
-        //     {
-        //         mvSemanticCls[i] = mvKeys[i].class_id;
-        //     }
-        // }
-        // mvInstanceCls = vector<int>(N, 0);
-        // if (instance_flag)
-        // {
-        //     for (int i = 0; i < mvKeys.size(); i++)
-        //     {
-        //         mvInstanceCls[i] = mvKeys[i].class_id;
-        //     }
-        // }
-        // mvKeysMoving = vector<bool>(N, false);
+            ComputeImageBounds(imLeft);
+
+            mfGridElementWidthInv = static_cast<float>(FRAME_GRID_COLS) / (mnMaxX - mnMinX);
+            mfGridElementHeightInv = static_cast<float>(FRAME_GRID_ROWS) / (mnMaxY - mnMinY);
+
+            fx = K.at<float>(0, 0);
+            fy = K.at<float>(1, 1);
+            cx = K.at<float>(0, 2);
+            cy = K.at<float>(1, 2);
+            invfx = 1.0f / fx;
+            invfy = 1.0f / fy;
+
+            mbInitialComputations = false;
+        }
+
+        mb = mbf / fx;
+
+        if (pPrevF)
+        {
+            if (pPrevF->HasVelocity())
+                SetVelocity(pPrevF->GetVelocity());
+        }
+        else
+        {
+            mVw.setZero();
+        }
+
+        mpMutexImu = new std::mutex();
+
+        // Set no stereo fisheye information
+        Nleft = -1;
+        Nright = -1;
+        mvLeftToRightMatch = vector<int>(0);
+        mvRightToLeftMatch = vector<int>(0);
+        mvStereo3Dpoints = vector<Eigen::Vector3f>(0);
+        monoLeft = -1;
+        monoRight = -1;
+
+        AssignFeaturesToGrid();
+    }
+
+    //  Semantic Stereo Frame with Lines
+    Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight,
+    Lineextractor* LineExtractorLeft, Lineextractor* LineextractorRight, ORBVocabulary *voc, LineVocabulary* voc_line,
+    cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF, const IMU::Calib &ImuCalib, const bool moving_flag, const bool dynamic_flag, const bool semantic_flag, const bool instance_flag)
+        : mpcpi(nullptr), mbHasPose(false), mbHasVelocity(false), mpORBvocabulary(voc), mpLineVocabulary(voc_line), mpORBextractorLeft(extractorLeft), mpORBextractorRight(extractorRight), mpLineExtractorLeft(LineExtractorLeft), mpLineExtractorRight(LineExtractorRight), mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)), mDistCoef(distCoef.clone()),
+          mbf(bf), mThDepth(thDepth), mImuCalib(ImuCalib), mpImuPreintegrated(nullptr), mpPrevFrame(pPrevF), mpImuPreintegratedFrame(nullptr), mpReferenceKF(static_cast<KeyFrame *>(nullptr)),
+          mbIsSet(false), mbImuPreintegrated(false), mpCamera(pCamera), mpCamera2(nullptr)
+    {
+        semantic_meta = seg_meta;
+        // Frame ID
+        mnId = nNextId++;
+
+        // Scale Level Info
+        mnScaleLevels = mpORBextractorLeft->GetLevels();
+        mfScaleFactor = mpORBextractorLeft->GetScaleFactor();
+        mfLogScaleFactor = log(mfScaleFactor);
+        mvScaleFactors = mpORBextractorLeft->GetScaleFactors();
+        mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
+        mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
+        mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
+
+        mnScaleLevelsLine = mpLineExtractorLeft->GetLevels();
+        mvScaleFactorsLine = mpLineExtractorLeft->GetScaleFactors();
+        mvInvScaleFactorsLine = mpLineExtractorLeft->GetInverseScaleFactors();
+        mvLevelSigma2Line =  mpLineExtractorLeft->GetScaleSigmaSquares();
+        mvInvLevelSigma2Line = mpLineExtractorLeft->GetInverseScaleSigmaSquares();
+
+        // ORB extraction
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_StartExtORB = std::chrono::steady_clock::now();
+#endif
+        // thread threadLeft(&Frame::ExtractORBSem, this, 0, imLeft, 0, 0, imLeftSem);
+        thread threadLeft(&Frame::ExtractORB, this, 0, imLeft, 0, 0);
+        thread threadRight(&Frame::ExtractORB, this, 1, imRight, 0, 0);
+        threadLeft.join();
+        threadRight.join();
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_EndExtORB = std::chrono::steady_clock::now();
+
+        mTimeORB_Ext = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndExtORB - time_StartExtORB).count();
+#endif
+        processSemanticKeyPoints(imLeftSem, dynamic_flag);
+
+        N = mvKeys.size();
+        if (mvKeys.empty())
+            return;
+
+        N = mvKeys.size();
+        if (mvKeys.empty())
+            return;
+
+        UndistortKeyPoints();
+
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_StartStereoMatches = std::chrono::steady_clock::now();
+#endif
+        ComputeStereoMatches();
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_EndStereoMatches = std::chrono::steady_clock::now();
+
+        mTimeStereoMatch = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndStereoMatches - time_StartStereoMatches).count();
+#endif
+        mvpMapPoints = vector<MapPoint *>(N, static_cast<MapPoint *>(nullptr));
+        mvbOutlier = vector<bool>(N, false);
+        mmProjectPoints.clear();
+        mmMatchedInImage.clear();
+
+
+        mvSemanticCls = vector<int>(N, 0);
+        mvInstanceCls = vector<int>(N, 0);
+        mvKeysMoving = vector<bool>(N, false);
+
+        for (int i = 0; i < mvKeys.size(); i++) {
+            updateSemanticInfo(mvKeys[i], imLeftSem);
+        }
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_StartExtLine = std::chrono::steady_clock::now();
+#endif
+        thread threadLeft_Line(&Frame::ExtractLine,this,0,imLeft);
+        thread threadRight_Line(&Frame::ExtractLine,this,1,imRight);
+        threadLeft_Line.join();
+        threadRight_Line.join();
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_EndExtLine = std::chrono::steady_clock::now();
+
+        mTimeLine_Ext = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndExtLine - time_StartExtLine).count();
+#endif
+        N_Lines = mvKeysLine.size();
+       
+        UndistortKeyLines();
+
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_StartStereoMatches_Lines = std::chrono::steady_clock::now();
+#endif
+        ComputeStereoMatches_Lines();
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_EndStereoMatches_Lines = std::chrono::steady_clock::now();
+
+        mTimeStereoMatch_Lines = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndStereoMatches_Lines - time_StartStereoMatches_Lines).count();
+#endif
+        mvpMapLines = vector<MapLine*>(N_Lines,static_cast<MapLine*>(nullptr));
+        mvbOutlierLine = vector<bool>(N_Lines,false);
 
         // This is done only for the first Frame (or after a change in the calibration)
         if (mbInitialComputations)
@@ -618,6 +749,100 @@ namespace ORB_SLAM3
         mpMutexImu = new std::mutex();
     }
 
+    void Frame::processSemanticKeyPoints(const cv::Mat &imLeftSem, bool dynamic_flag) {
+        if (dynamic_flag) {
+            std::vector<cv::KeyPoint> KeysClear;
+            cv::Mat DescriptorsClear;
+            
+            // Filter keypoints based on semantic information
+            for (auto & mvKey : mvKeys) {
+                bool flag = false;
+                for (int i1 = -5; i1 < 6; i1++) {
+                    for (int i2 = -5; i2 < 6; i2++) {
+                        if (((int)mvKey.pt.x + i1 < 0) || ((int)mvKey.pt.x + i1 >= imLeftSem.rows)) {
+                            continue;
+                        }
+                        if (((int)mvKey.pt.y + i2 < 0) || ((int)mvKey.pt.y + i2 >= imLeftSem.cols)) {
+                            continue;
+                        }
+                        int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKey.pt.x + i1, (int)mvKey.pt.y + i2)))[0];
+                        if ((cls == 4) || (cls == 10)) {
+                            flag = true;
+                            break;
+                        }
+                    }
+                    if (flag) break;
+                }
+                if (!flag) {
+                    KeysClear.push_back(mvKey);
+                }
+            }
+
+            // Update descriptors
+            DescriptorsClear.create(KeysClear.size(), 32, CV_8U);
+            int j = 0;
+            for (int i = 0; i < mvKeys.size(); i++) {
+                bool flag = false;
+                for (int i1 = -5; i1 < 6; i1++) {
+                    for (int i2 = -5; i2 < 6; i2++) {
+                        if (((int)mvKeys[i].pt.x + i1 < 0) || ((int)mvKeys[i].pt.x + i1 >= imLeftSem.rows)) {
+                            continue;
+                        }
+                        if (((int)mvKeys[i].pt.y + i2 < 0) || ((int)mvKeys[i].pt.y + i2 >= imLeftSem.cols)) {
+                            continue;
+                        }
+                        int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKeys[i].pt.x + i1, (int)mvKeys[i].pt.y + i2)))[0];
+                        if ((cls == 4) || (cls == 10)) {
+                            flag = true;
+                            break;
+                        }
+                    }
+                    if (flag) break;
+                }
+                if (!flag) {
+                    mDescriptors.row(i).copyTo(DescriptorsClear.row(j));
+                    j += 1;
+                }
+            }
+            mvKeys = KeysClear;
+            mDescriptors = DescriptorsClear;
+        }
+    }
+
+    void Frame::updateSemanticInfo(const cv::KeyPoint &kp, const cv::Mat &imLeftSem) {
+        bool flag = false;
+        for (int i1 = -5; i1 < 6; i1++) {
+            for (int i2 = -5; i2 < 6; i2++) {
+                if (((int)kp.pt.x + i1 < 0) || ((int)kp.pt.x + i1 >= imLeftSem.rows)) {
+                    continue;
+                }
+                if (((int)kp.pt.y + i2 < 0) || ((int)kp.pt.y + i2 >= imLeftSem.cols)) {
+                    continue;
+                }
+                int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)kp.pt.x + i1, (int)kp.pt.y + i2)))[0];
+                if ((cls == 4) || (cls == 10)) {
+                    flag = true;
+                    int instance_cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)kp.pt.x + i1, (int)kp.pt.y + i2))[1]) * 1000 + 
+                                    (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)kp.pt.x + i1, (int)kp.pt.y + i2)))[2];
+                    mvSemanticCls[i] = cls;
+                    mvInstanceCls[i] = instance_cls;
+                    if ((semantic_meta.find(instance_cls) != semantic_meta.end()) && semantic_meta[instance_cls]) {
+                        mvKeysMoving[i] = true;
+                    }
+                    break;
+                }
+            }
+            if (flag) break;
+        }
+        if (!flag) {
+            int instance_cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)kp.pt.x, (int)kp.pt.y))[1]) * 1000 + 
+                            (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)kp.pt.x, (int)kp.pt.y)))[2];
+            int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)kp.pt.x, (int)kp.pt.y))[0]);
+            mvSemanticCls[i] = cls;
+            mvInstanceCls[i] = instance_cls;
+        }
+    }
+
     void Frame::AssignFeaturesToGrid()
     {
         // Fill matrix with points
@@ -652,6 +877,7 @@ namespace ORB_SLAM3
         }
     }
 
+
     void Frame::ExtractORB(int flag, const cv::Mat &im, const int x0, const int x1)
     {
         vector<int> vLapping = {x0, x1};
@@ -668,6 +894,14 @@ namespace ORB_SLAM3
             monoLeft = (*mpORBextractorLeft)(im, imSem, mvKeys, mDescriptors, vLapping);
         else
             monoRight = (*mpORBextractorRight)(im, cv::Mat(), mvKeysRight, mDescriptorsRight, vLapping);
+    }
+
+    void Frame::ExtractLine(int flag, const cv::Mat &im)
+    {
+        if(flag==0)
+            (*mpLineExtractorLeft)(im,cv::Mat(),mvKeys_Line,mDescriptors_Line);
+        else
+            (*mpLineExtractorRight)(im,cv::Mat(),mvKeysRight_Line,mDescriptorsRight_Line);
     }
 
     bool Frame::isSet() const
@@ -837,6 +1071,82 @@ namespace ORB_SLAM3
 
             return pMP->mbTrackInView || pMP->mbTrackInViewR;
         }
+    }
+
+    bool Frame::isInFrustumLine(MapLine *pML, float viewingCosLimit)
+    {
+        pML->mbTrackInView = false;
+
+        // 3D in absolute coordinates
+        Eigen::Matrix<float, 6, 1> sep = pML->GetWorldPos();
+        Eigen::Matrix<float, 3, 1> sp_eigen = sep.head(3);
+        Eigen::Matrix<float, 3, 1> ep_eigen = sep.tail(3);
+        {
+            const Eigen::Matrix<float, 3, 1> Pc = mRcw * sp_eigen + mtcw;
+            const float Pc_dist = Pc.norm();
+
+            // Check positive depth
+            const float &PcZ = Pc(2);
+            const float invz = 1.0f / PcZ;
+            if (PcZ < 0.0f)
+                return false;
+
+            const Eigen::Vector2f uv = mpCamera->project(Pc);
+
+            if (uv(0) < mnMinX || uv(0) > mnMaxX)
+                return false;
+            if (uv(1) < mnMinY || uv(1) > mnMaxY)
+                return false;
+
+            pML->mTrackProjsX = uv(0);
+            pML->mTrackProjsY = uv(1);
+        }
+        {
+            // 3D in camera coordinates
+            const Eigen::Matrix<float, 3, 1> Pc = mRcw * ep_eigen + mtcw;
+            const float Pc_dist = Pc.norm();
+
+            // Check positive depth
+            const float &PcZ = Pc(2);
+            const float invz = 1.0f / PcZ;
+            if (PcZ < 0.0f)
+                return false;
+
+            const Eigen::Vector2f uv = mpCamera->project(Pc);
+
+            if (uv(0) < mnMinX || uv(0) > mnMaxX)
+                return false;
+            if (uv(1) < mnMinY || uv(1) > mnMaxY)
+                return false;
+
+            pML->mTrackProjeX = uv(0);
+            pML->mTrackProjeY = uv(1);
+        }
+
+        Eigen::Matrix<float, 3, 1> MidPoint = (sp_eigen+ep_eigen)/2;
+
+        // Check distance is in the scale invariance region of the MapPoint
+        const float maxDistance = pML->GetMaxDistanceInvariance();
+        const float minDistance = pML->GetMinDistanceInvariance();
+        const Eigen::Vector3f PO = MidPoint - mOw;
+        const float dist = PO.norm();
+
+        if (dist < minDistance || dist > maxDistance)
+            return false;
+
+        // Check viewing angle
+        Eigen::Vector3f Pn = pML->GetNormal();
+
+        const float viewCos = PO.dot(Pn) / dist;
+
+        if(viewCos < viewingCosLimit)
+            return false;
+
+        // Data used by the tracking
+        pML->mbTrackInView = true;
+        pML->mnTrackangle = atan2(pML->mTrackProjeY - pML->mTrackProjsY, pML->mTrackProjeX - pML->mTrackProjsX);
+
+        return true;
     }
 
     bool Frame::ProjectPointDistort(MapPoint *pMP, cv::Point2f &kp, float &u, float &v)
@@ -1027,6 +1337,49 @@ namespace ORB_SLAM3
             kp.pt.y = mat.at<float>(i, 1);
             mvKeysUn[i] = kp;
         }
+    }
+
+    void Frame::UndistortKeyLines()
+    {
+        if(mDistCoef.at<float>(0)==0.0)
+        {
+            mvKeysUn_Line = mvKeys_Line;
+            return;
+        }
+
+        N_Lines = mvKeys_Line.size();   // update N_l
+
+        // Fill matrix with points
+        cv::Mat mat_s(N_Lines, 2, CV_32F);
+        cv::Mat mat_e(N_Lines, 2, CV_32F);
+    
+        for(int i=0; i < N_Lines; i++)
+        {
+            mat_s.at<float>(i,0) = mvKeys_Line[i].startPointX;
+            mat_s.at<float>(i,1) = mvKeys_Line[i].startPointY;
+            mat_e.at<float>(i,0) = mvKeys_Line[i].endPointX;
+            mat_e.at<float>(i,1) = mvKeys_Line[i].endPointY;
+        }
+
+        // Undistort points
+        mat_s = mat_s.reshape(2);
+        mat_e = mat_e.reshape(2);
+
+        cv::undistortPoints(mat_s, mat_s, dynamic_cast<Pinhole *>(mpCamera)->toK(), mDistCoef, cv::Mat(), mK);
+        cv::undistortPoints(mat_e, mat_e, dynamic_cast<Pinhole *>(mpCamera)->toK(), mDistCoef, cv::Mat(), mK);
+
+        mat_s = mat_s.reshape(1);
+        mat_e = mat_e.reshape(1);
+
+        // Fill undistorted keypoint vector
+        mvKeysUn_Line.resize(N_Lines);
+        for(int i = 0; i < N_Lines; i++)
+        { 
+            mvKeysUn_Line[i].startPointX = mat_s.at<float>(i,0);
+            mvKeysUn_Line[i].startPointY = mat_s.at<float>(i,1);
+            mvKeysUn_Line[i].endPointX = mat_e.at<float>(i,0);
+            mvKeysUn_Line[i].endPointY = mat_e.at<float>(i,1);
+        }  
     }
 
     void Frame::ComputeImageBounds(const cv::Mat &imLeft)
@@ -1233,6 +1586,145 @@ namespace ORB_SLAM3
         }
     }
 
+    void Frame::ComputeStereoMatches_Lines()
+    {
+        // Depth, Disparity and the 3D vector that expresses the observed inﬁnite line in the image plane
+        mvDepth_Lines.resize(N_Lines,pair<float,float>(-1.0f,-1.0f));
+        // mvDisparity_Lines.clear();
+        // mvle_Lines.clear();
+        // mvDisparity_Lines.resize(mvKeys_Line.size(),pair<float,float>(-1,-1));
+        // mvle_Lines.resize(mvKeys_Line.size(),Vector3d(0,0,0));
+
+        // Line segments stereo matching
+        // --------------------------------------------------------------------------------------------------------------------
+        if (mvKeys_Line.empty() || mvKeysRight_Line.empty())
+            return;
+
+        std::vector<line_2d> coords;   // line_2d type definition in LineMatcher.h
+        coords.reserve(mvKeys_Line.size());
+        for (const KeyLine &kl : mvKeys_Line)
+            coords.push_back(std::make_pair(std::make_pair(kl.startPointX * inv_width, kl.startPointY * inv_height),
+                                            std::make_pair(kl.endPointX * inv_width, kl.endPointY * inv_height))); 
+
+        //Fill in grid & directions
+        list<pair<int, int>> line_coords;
+        GridStructure grid(FRAME_GRID_ROWS, FRAME_GRID_COLS);
+        
+        std::vector<std::pair<float, float>> directions(mvKeysRight_Line.size());
+        for (unsigned int idx = 0; idx < mvKeysRight_Line.size(); ++idx) {
+            const KeyLine &kl = mvKeysRight_Line[idx];
+
+            std::pair<float, float> &v = directions[idx];
+            v = std::make_pair((kl.endPointX - kl.startPointX) * inv_width, (kl.endPointY - kl.startPointY) * inv_height);
+            normalize(v);
+
+            getLineCoords(kl.startPointX * inv_width, kl.startPointY * inv_height, kl.endPointX * inv_width, kl.endPointY * inv_height, line_coords);
+            for (const std::pair<int, int> &p : line_coords)
+                grid.at(p.first, p.second).push_back(idx);
+        }
+
+        GridWindow w;
+        int size_width = 7;
+        int size_height = 2; // You can increase this value for non rectified images
+        w.width = std::make_pair(size_width, 0);
+        w.height = std::make_pair(size_height, size_height);
+
+        std::vector<int> matches_12;
+        LineMatcher::matchGrid(coords, mDescriptors_Line, grid, mDescriptorsRight_Line, directions, w, matches_12);
+
+        // bucle around left matches
+        cv::Mat mDescriptors_Line_aux;
+        for (unsigned int i1 = 0; i1 < matches_12.size(); ++i1) {
+            const int i2 = matches_12[i1];
+            if (i2 < 0) continue;
+
+            // estimate the disparity of the endpoints
+            Eigen::Vector3f sp_l; sp_l << mvKeys_Line[i1].startPointX, mvKeys_Line[i1].startPointY, 1.0;
+            Eigen::Vector3f ep_l; ep_l << mvKeys_Line[i1].endPointX,   mvKeys_Line[i1].endPointY,   1.0;
+            Eigen::Vector3f sp_r; sp_r << mvKeysRight_Line[i2].startPointX, mvKeysRight_Line[i2].startPointY, 1.0;
+            Eigen::Vector3f ep_r; ep_r << mvKeysRight_Line[i2].endPointX,   mvKeysRight_Line[i2].endPointY,   1.0;
+            Eigen::Vector3f le_r; le_r << sp_r.cross(ep_r);
+
+            float overlap = lineSegmentOverlapStereo( sp_l(1), ep_l(1), sp_r(1), ep_r(1) );
+
+            float disp_s, disp_e;
+            sp_r << ( sp_r(0)*( sp_l(1) - ep_r(1) ) + ep_r(0)*( sp_r(1) - sp_l(1) ) ) / ( sp_r(1)-ep_r(1) ) , sp_l(1) ,  1.0;
+            ep_r << ( sp_r(0)*( ep_l(1) - ep_r(1) ) + ep_r(0)*( sp_r(1) - ep_l(1) ) ) / ( sp_r(1)-ep_r(1) ) , ep_l(1) ,  1.0;
+            filterLineSegmentDisparity( sp_l.head(2), ep_l.head(2), sp_r.head(2), ep_r.head(2), disp_s, disp_e );
+
+            // check minimal disparity
+            int minDisp = 1;
+            float lineHorizTh = 0.1;
+            float stereoOverlapTh = 0.75;
+            if( disp_s >= minDisp && disp_e >= minDisp
+                && std::abs( sp_l(1)-ep_l(1) ) > lineHorizTh
+                && std::abs( sp_r(1)-ep_r(1) ) > lineHorizTh
+                && overlap > stereoOverlapTh )
+            {
+                // mvDisparity_l[i1] = make_pair(disp_s,disp_e);
+                mvDepth_Lines[i1] = pair<float,float>(mbf/float(disp_s), mbf/float(disp_e));
+            }
+        }
+        // for (int i=0; i < N_Lines; i++) {
+        //     Vector3d sp_lun; sp_lun << mvKeysUn_Line[i].startPointX, mvKeysUn_Line[i].startPointY, 1.0;
+        //     Vector3d ep_lun; ep_lun << mvKeysUn_Line[i].endPointX,   mvKeysUn_Line[i].endPointY,   1.0;
+        //     Vector3d le_l; le_l << sp_lun.cross(ep_lun); le_l = le_l / std::sqrt( le_l(0)*le_l(0) + le_l(1)*le_l(1) );
+        //     mvle_Lines[i] = le_l;
+        // }
+    }
+
+
+    float Frame::lineSegmentOverlapStereo(float spl_obs, float epl_obs, float spl_proj, float epl_proj)
+    {
+        float overlap = 1.f;
+        float lineHorizTh = 0.1;
+
+        if( fabs( epl_obs - spl_obs ) > lineHorizTh ) // normal lines (verticals included)
+        {
+            float sln    = min(spl_obs,  epl_obs);
+            float eln    = max(spl_obs,  epl_obs);
+            float spn    = min(spl_proj, epl_proj);
+            float epn    = max(spl_proj, epl_proj);
+
+            float length = eln-spn;
+
+            if ( (epn < sln) || (spn > eln) )
+                overlap = 0.f;
+            else{
+                if ( (epn>eln) && (spn<sln) )
+                    overlap = eln-sln;
+                else
+                    overlap = min(eln,epn) - max(sln,spn);
+            }
+
+            if(length>0.01f)
+                overlap = overlap / length;
+            else
+                overlap = 0.f;
+
+            if( overlap > 1.f )
+                overlap = 1.f;
+
+        }
+
+        return overlap;
+    }
+
+    void Frame::filterLineSegmentDisparity( Eigen::Vector2f spl, Eigen::Vector2f epl, Eigen::Vector2f spr, Eigen::Vector2f epr, float &disp_s, float &disp_e )
+    {
+        disp_s = spl(0) - spr(0);
+        disp_e = epl(0) - epr(0);
+        // if they are too different, ignore them
+        float lsMinDispRatio = 0.7;
+        if(  min( disp_s, disp_e ) / max( disp_s, disp_e ) < lsMinDispRatio )
+        {
+            disp_s = -1.0;
+            disp_e = -1.0;
+        }
+    }
+
+
+
     void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)
     {
         mvuRight = vector<float>(N, -1);
@@ -1267,6 +1759,29 @@ namespace ORB_SLAM3
             const float y = (v - cy) * z * invfy;
             Eigen::Vector3f x3Dc(x, y, z);
             x3D = mRwc * x3Dc + mOw;
+            return true;
+        }
+        else
+            return false;
+    }
+
+    bool Frame::UnprojectStereoLines(const int &i, Eigen::Vector3f &x3D_start, Eigen::Vector3f &x3D_end)
+    {
+        const pair<float,float> z = mvDepth_Lines[i];
+        if (z.first > 0 && z.second > 0) {
+            const float us = mvKeysUn_Line[i].startPointX;
+            const float vs = mvKeysUn_Line[i].startPointY;
+            const float xs = (us - cx) * z.first * invfx;
+            const float ys = (vs - cy) * z.first * invfy;
+            x3D_start = Eigen::Vector3f(xs, ys, z.first);
+            x3D_start = mRwc * x3D_start + mOw;
+
+            const float ue = mvKeysUn_Line[i].endPointX;
+            const float ve = mvKeysUn_Line[i].endPointY;
+            const float xe = (ue - cx) * z.second * invfx;
+            const float ye = (ve - cy) * z.second * invfy;
+            x3D_end = Eigen::Vector3f(xe, ye, z.second);
+            x3D_end = mRwc * x3D_end + mOw;
             return true;
         }
         else
