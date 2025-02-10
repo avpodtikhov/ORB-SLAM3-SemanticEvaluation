@@ -20,6 +20,7 @@
 #define KEYFRAME_H
 
 #include "MapPoint.h"
+#include "MapLine.h"
 #include "Thirdparty/DBoW2/DBoW2/BowVector.h"
 #include "Thirdparty/DBoW2/DBoW2/FeatureVector.h"
 #include "ORBVocabulary.h"
@@ -42,6 +43,7 @@ namespace ORB_SLAM3
 
     class Map;
     class MapPoint;
+    class MapLine;
     class Frame;
     class KeyFrameDatabase;
 
@@ -220,6 +222,8 @@ namespace ORB_SLAM3
         void EraseConnection(KeyFrame *pKF);
 
         void UpdateConnections(bool upParent = true);
+        void UpdateConnectionsWithLines(bool upParent=true);
+
         void UpdateBestCovisibles();
         std::map<long unsigned int,KeyFrame*> GetConnectedKeyFrames();
         std::vector<KeyFrame *> GetVectorCovisibleKeyFrames();
@@ -256,6 +260,16 @@ namespace ORB_SLAM3
         int TrackedMapPoints(const int &minObs);
         MapPoint *GetMapPoint(const size_t &idx);
 
+        // MapLine observation functions
+        void AddMapLine(MapLine* pML, const size_t &idx);
+        void EraseMapLineMatch(const size_t &idx);
+        void EraseMapLineMatch(MapLine* pML);
+        void ReplaceMapLineMatch(const size_t &idx, MapLine* pML);
+        std::map<unsigned long int, MapLine*> GetMapLines();
+        std::vector<MapLine*> GetMapLineMatches();
+        int TrackedMapLines(const int &minObs);
+        MapLine* GetMapLine(const size_t &idx);
+
         // KeyPoint functions
         std::vector<size_t> GetFeaturesInArea(const float &x, const float &y, const float &r, const bool bRight = false) const;
         bool UnprojectStereo(int i, Eigen::Vector3f &x3D);
@@ -269,6 +283,7 @@ namespace ORB_SLAM3
 
         // Set/check bad flag
         void SetBadFlag();
+        void SetBadFlagWithLines();
         bool isBad();
 
         // Compute Scene Depth (q=2 median). Used in monocular.
@@ -376,6 +391,8 @@ namespace ORB_SLAM3
 
         // Number of KeyPoints
         const int N;
+        // Number of MapLines
+        const int N_Lines;
 
         // KeyPoints, stereo coordinate and descriptors (all associated by an index)
         const std::vector<cv::KeyPoint> mvKeys;
@@ -383,6 +400,14 @@ namespace ORB_SLAM3
         const std::vector<float> mvuRight; // negative value for monocular points
         const std::vector<float> mvDepth;  // negative value for monocular points
         const cv::Mat mDescriptors;
+
+        // KeyLines
+        const std::vector<cv::line_descriptor::KeyLine> mvKeysLine;
+        const std::vector<cv::line_descriptor::KeyLine> mvKeysUnLine;
+        std::vector<pair<float,float>> mvDisparityLine;
+        std::vector<Eigen::Vector3f> mvleLine;
+        std::vector<pair<float,float>> mvDepthLine;
+        const cv::Mat mDescriptorsLine;
 
         // BoW
         DBoW2::BowVector mBowVec;
@@ -398,6 +423,11 @@ namespace ORB_SLAM3
         const std::vector<float> mvScaleFactors;
         const std::vector<float> mvLevelSigma2;
         const std::vector<float> mvInvLevelSigma2;
+
+        // Scale Lines
+        const int mnScaleLevelsLine;
+        const std::vector<float> mvScaleFactorsLine;
+        const std::vector<float> mvInvLevelSigma2Line;
 
         // Image bounds and calibration
         const int mnMinX;
@@ -447,12 +477,16 @@ namespace ORB_SLAM3
 
         // MapPoints associated to keypoints
         std::vector<MapPoint *> mvpMapPoints;
+        // MapLines associated to keylines
+        std::vector<MapLine*> mvpMapLines;
         // For save relation without pointer, this is necessary for save/load function
         std::vector<long long int> mvBackupMapPointsId;
+        std::vector<long long int> mvBackupMapLinesId;
 
         // BoW
         KeyFrameDatabase *mpKeyFrameDB;
         ORBVocabulary *mpORBvocabulary;
+        ORBVocabulary *mpLineVocabulary;
 
         // Grid over the image to speed up feature matching
         std::vector<std::vector<std::vector<size_t>>> mGrid;

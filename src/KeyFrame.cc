@@ -39,6 +39,8 @@ namespace ORB_SLAM3
                            cy(0), invfx(0), invfy(0), mbf(0), mb(0), mThDepth(0),
                            N(0), mvKeys(static_cast<vector<cv::KeyPoint>>(0)), mvKeysUn(static_cast<vector<cv::KeyPoint>>(0)), mvuRight(static_cast<vector<float>>(0)),
                            mvDepth(static_cast<vector<float>>(0)), mnScaleLevels(0), mfScaleFactor(0), mfLogScaleFactor(0), mvScaleFactors(0), mvLevelSigma2(0), mvInvLevelSigma2(0),
+                           N_Lines(0), mvKeysLine(static_cast<vector<cv::line_descriptor::KeyLine>>(0)), mvKeysUnLine(static_cast<vector<cv::line_descriptor::KeyLine>>(0)), mvDepthLine(static_cast<vector<pair<float, float>>>(0, 0)),
+                           mnScaleLevelsLine(0), mvScaleFactorsLine(0), mvInvLevelSigma2Line(0),
                            mnMinX(0), mnMinY(0), mnMaxX(0), mnMaxY(0), mPrevKF(static_cast<KeyFrame *>(nullptr)), mNextKF(static_cast<KeyFrame *>(nullptr)),
                            mbHasVelocity(false), mbFirstConnection(true), mpParent(nullptr), mbNotErase(false), mbToBeErased(false),
                            mbBad(false), mHalfBaseline(0), NLeft(0), NRight(0)
@@ -62,7 +64,9 @@ namespace ORB_SLAM3
                                                                        mpParent(nullptr), mbNotErase(false), mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb / 2),
                                                                        mpMap(pMap),
                                                                        mK_(F.mK_), mpCamera(F.mpCamera),
-                                                                       mpCamera2(F.mpCamera2), mvLeftToRightMatch(F.mvLeftToRightMatch), mvRightToLeftMatch(F.mvRightToLeftMatch), mvKeysRight(F.mvKeysRight), NLeft(F.Nleft), NRight(F.Nright)
+                                                                       mpCamera2(F.mpCamera2), mvLeftToRightMatch(F.mvLeftToRightMatch), mvRightToLeftMatch(F.mvRightToLeftMatch), mvKeysRight(F.mvKeysRight), NLeft(F.Nleft), NRight(F.Nright),
+                                                                       N_Lines(F.N_Lines), mvKeysLine(F.mvKeysLine), mvKeysUnLine(F.mvKeysUnLine), mvDepthLine(F.mvDepthLine), mnScaleLevelsLine(F.mnScaleLevelsLine), mvScaleFactorsLine(F.mvScaleFactorsLine), mvInvLevelSigma2Line(F.mvInvLevelSigma2Line),
+                                                                       mvpMapLines(F.mvpMapLines), mDescriptorsLine(F.mDescriptorsLine.clone()), mpLineVocabulary(F.mpLineVocabulary)
     {
         mnId = nNextId++;
 
@@ -337,10 +341,27 @@ namespace ORB_SLAM3
         }
     }
 
+    void KeyFrame::AddMapLine(MapLine *pML, const size_t &idx)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        mvpMapLines[idx]=pML;
+        if (this == pML->GetCurrentRefKeyframe())
+        {
+            pML->SetCurrentRefKeyframeIndex(idx);
+        }
+    }
+
+
     void KeyFrame::EraseMapPointMatch(const int &idx)
     {
         // unique_lock<mutex> lock(mMutexFeatures);
         mvpMapPoints[idx] = static_cast<MapPoint *>(nullptr);
+    }
+
+    void KeyFrame::EraseMapLineMatch(const size_t &idx)
+    {
+        // unique_lock<mutex> lock(mMutexFeatures);
+        mvpMapLines[idx]=static_cast<MapLine*>(nullptr);
     }
 
     void KeyFrame::EraseMapPointMatch(MapPoint *pMP)
@@ -353,9 +374,21 @@ namespace ORB_SLAM3
             mvpMapPoints[rightIndex] = static_cast<MapPoint *>(nullptr);
     }
 
+    void KeyFrame::EraseMapLineMatch(MapLine* pML)
+    {
+        int idx = pML->GetIndexInKeyFrame(this);
+        if(idx != -1)
+            mvpMapLines[idx] = static_cast<MapLine*>(nullptr);
+    }
+
     void KeyFrame::ReplaceMapPointMatch(const int &idx, MapPoint *pMP)
     {
         mvpMapPoints[idx] = pMP;
+    }
+
+    void KeyFrame::ReplaceMapLineMatch(const size_t &idx, MapLine* pML)
+    {
+        mvpMapLines[idx]=pML;
     }
 
     std::map<unsigned long int, MapPoint *> KeyFrame::GetMapPoints()
@@ -369,6 +402,21 @@ namespace ORB_SLAM3
             MapPoint *pMP = mvpMapPoint;
             if (!pMP->isBad())
                 s[pMP->mnId] = pMP;
+        }
+        return s;
+    }
+
+    std::map<unsigned long int, MapLine*> KeyFrame::GetMapLines()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        std::map<unsigned long int, MapLine*> s;
+        for (auto &mvpMapLine : mvpMapLines)
+        {
+            if(!mvpMapLine)
+                continue;
+            MapLine* pML = mvpMapLine;
+            if(!pML->isBad())
+                s[pML->mnId] = pML;
         }
         return s;
     }
@@ -400,10 +448,45 @@ namespace ORB_SLAM3
         return nPoints;
     }
 
+    int KeyFrame::TrackedMapLines(const int &minObs)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+
+        int nLines=0;
+        const bool bCheckObs = minObs>0;
+        for(int i = 0; i < N_Lines; i++)
+        {
+            MapLine* pML = mvpMapLines[i];
+            if(pML)
+            {
+                if(!pML->isBad())
+                {
+                    if(bCheckObs)
+                    {
+                        if (mvpMapLines[i]->Observations() >= minObs)
+                            nLines++;
+                    }
+                    else
+                        nLines++;
+                }
+            }
+        }
+
+        return nLines;
+    }
+
+
+
     vector<MapPoint *> KeyFrame::GetMapPointMatches()
     {
         unique_lock<mutex> lock(mMutexFeatures);
         return mvpMapPoints;
+    }
+
+    vector<MapLine*> KeyFrame::GetMapLineMatches()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return mvpMapLines;
     }
 
     MapPoint *KeyFrame::GetMapPoint(const size_t &idx)
@@ -411,6 +494,13 @@ namespace ORB_SLAM3
         unique_lock<mutex> lock(mMutexFeatures);
         return mvpMapPoints[idx];
     }
+
+    MapLine* KeyFrame::GetMapLine(const size_t &idx)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return mvpMapLines[idx];
+    }
+
 
     void KeyFrame::UpdateConnections(bool upParent)
     {
@@ -504,6 +594,125 @@ namespace ORB_SLAM3
                 mpParent->AddChild(this);
                 mbFirstConnection = false;
             }
+        }
+    }
+
+    void KeyFrame::UpdateConnectionsWithLines(bool upParent)
+    {
+        // map<KeyFrame*,int> KFcounter;
+        map<unsigned long int, int> KFweightsCounter;
+        map<unsigned long int, KeyFrame *> KFcounter;
+
+        vector<MapPoint*> vpMP;
+        vector<MapLine*> vpML;
+
+        {
+            unique_lock<mutex> lockMPs(mMutexFeatures);
+            vpMP = mvpMapPoints;
+            vpML = mvpMapLines;
+        }
+
+        //For all map points in keyframe check in which other keyframes are they seen
+        //Increase counter for those keyframes
+        for (auto pMP : vpMP)
+        {
+            if (!pMP)
+                continue;
+
+            if(pMP->isBad())
+                continue;
+
+            std::map<unsigned long int, Observation> observations = pMP->GetObservations();
+
+            for(auto &observation : observations)
+            {
+                if (observation.first == mnId || observation.second.projKeyframe->isBad() || observation.second.projKeyframe->GetMap() != mpMap)
+                    continue;
+                KFweightsCounter[observation.first]++;
+                KFcounter[observation.first] = observation.second.projKeyframe;
+            }
+        }
+
+        for(auto pML : vpML)
+        {
+            if(!pML)
+                continue;
+
+            if(pML->isBad())
+                continue;
+
+            std::map<unsigned long int, ObservationLine> observations = pML->GetObservations();
+
+            for(auto &observation : observations)
+            {
+                if (observation.first == mnId || observation.second.projKeyframe->isBad() || observation.second.projKeyframe->GetMap() != mpMap)
+                    continue;
+                KFweightsCounter[observation.first]++;
+                KFcounter[observation.first] = observation.second.projKeyframe;
+            }
+        } 
+
+        // This should not happen
+        if(KFcounter.empty())
+            return;
+
+        //If the counter is greater than threshold add connection
+        //In case no keyframe counter is over threshold add the one with maximum counter
+        int nmax=0;
+        KeyFrame* pKFmax = nullptr;
+        int th = 15;
+
+        vector<pair<int,KeyFrame*> > vPairs;
+        vPairs.reserve(KFweightsCounter.size());
+        if (!upParent)
+            cout << "UPDATE_CONN: current KF " << mnId << endl;
+        for (auto &mit : KFweightsCounter)
+        {
+            if (!upParent)
+                cout << "  UPDATE_CONN: KF " << KFcounter[mit.first]->mnId << " ; num matches: " << mit.second << endl;
+
+            if (mit.second > nmax)
+            {
+                nmax = mit.second;
+                pKFmax = KFcounter[mit.first];
+            }
+            if (mit.second >= th)
+            {
+                vPairs.emplace_back(mit.second, KFcounter[mit.first]);
+                KFcounter[mit.first]->AddConnection(this, mit.second);
+            }
+        }
+
+        if(vPairs.empty())
+        {
+            vPairs.emplace_back(nmax, pKFmax);
+            pKFmax->AddConnection(this, nmax);
+        }
+
+        sort(vPairs.begin(),vPairs.end(), KeyframeComparison);
+        list<KeyFrame*> lKFs;
+        list<int> lWs;
+        for(auto &vP : vPairs)
+        {
+            lKFs.push_front(vP.second);
+            lWs.push_front(vP.first);
+        }
+
+        {
+            unique_lock<mutex> lockCon(mMutexConnections);
+
+            mConnectedKeyFrameWeights = KFweightsCounter;
+            mConnectedKeyFrames = KFcounter;
+            mvpOrderedConnectedKeyFrames = vector<KeyFrame*>(lKFs.begin(),lKFs.end());
+            mvOrderedWeights = vector<int>(lWs.begin(), lWs.end());
+
+            if(mbFirstConnection && mnId!=mpMap->GetInitKFid())
+            {
+                mpParent = mvpOrderedConnectedKeyFrames.front();
+                mpParent->AddChild(this);
+                mbFirstConnection = false;
+            }
+
         }
     }
 
@@ -713,6 +922,120 @@ namespace ORB_SLAM3
         mpKeyFrameDB->erase(this);
     }
 
+    void KeyFrame::SetBadFlagWithLines()
+    {   
+        {
+            unique_lock<mutex> lock(mMutexConnections);
+            if(mnId==mpMap->GetInitKFid())
+            {
+                return;
+            }
+            else if(mbNotErase)
+            {
+                mbToBeErased = true;
+                return;
+            }
+        }
+        for (auto &mConnectedKeyFrameWeight : mConnectedKeyFrames)
+        {
+            mConnectedKeyFrameWeight.second->EraseConnection(this);
+        }
+
+        for(auto &mvpMapPoint : mvpMapPoints)
+        {
+            if(mvpMapPoint)
+            {
+                mvpMapPoint->EraseObservation(this);
+            }
+        }
+
+        for(auto &mvpMapLine : mvpMapLines)
+        {
+            if(mvpMapLine)
+            {
+                mvpMapLine->EraseObservation(this);
+            }
+        }
+
+        {
+            unique_lock<mutex> lock(mMutexConnections);
+            unique_lock<mutex> lock1(mMutexFeatures);
+
+            mConnectedKeyFrameWeights.clear();
+            mConnectedKeyFrames.clear();
+            mvpOrderedConnectedKeyFrames.clear();
+
+            // Update Spanning Tree
+            map<unsigned long int, KeyFrame **> sParentCandidates;
+            if (mpParent)
+                sParentCandidates[mpParent->mnId] = &mpParent;
+
+
+            // Assign at each iteration one children with a parent (the pair with highest covisibility weight)
+            // Include that children as new parent candidate for the rest
+            while (!mspChildrens.empty())
+            {
+                bool bContinue = false;
+
+                int max = -1;
+                KeyFrame* pC;
+                KeyFrame* pP;
+
+                for(auto &mspChild : mspChildrens)
+                {
+                    KeyFrame* pKF = mspChild.second;
+                    if (pKF->isBad())
+                        continue;
+
+                    // Check if a parent candidate is connected to the keyframe
+                    vector<KeyFrame*> vpConnected = pKF->GetVectorCovisibleKeyFrames();
+                    for(auto &vpConnected : vpConnected)
+                    {
+                        for(auto &sParentCandidate : sParentCandidates)
+                        {
+                            if(vpConnected->mnId == sParentCandidate.first)
+                            {
+                                int w = pKF->GetWeight(vpConnected);
+                                if (w > max)
+                                {
+                                    pC = pKF;
+                                    pP = vpConnected;
+                                    max = w;
+                                    bContinue = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if(bContinue)
+                {
+                    pC->ChangeParent(pP);
+                    sParentCandidates[pC->mnId] = &pC;
+                    mspChildrens.erase(pC->mnId);
+                }
+                else
+                    break;
+            }
+
+            // If a children has no covisibility links with any parent candidate, assign to the original parent of this KF
+            if(!mspChildrens.empty())
+            {
+                for(auto &mspChild : mspChildrens)
+                {
+                    mspChild.second->ChangeParent(mpParent);
+                }
+            }
+
+            if(mpParent)
+            {
+                mpParent->EraseChild(this);
+                mTcp = mTcw * mpParent->GetPoseInverse();
+            }
+            mbBad = true;
+        }
+    }
+    
     bool KeyFrame::isBad()
     {
         unique_lock<mutex> lock(mMutexConnections);

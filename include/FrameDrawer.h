@@ -22,6 +22,7 @@
 #include "Tracking.h"
 #include "MapPoint.h"
 #include "Atlas.h"
+#include "MapLine.h"
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
@@ -46,20 +47,24 @@ namespace ORB_SLAM3
 
         // Draw last processed frame.
         cv::Mat DrawFrame(float imageScale = 1.f);
+        cv::Mat DrawFrameWithLines(bool bOldFeatures=true);
+
         cv::Mat DrawRightFrame(float imageScale = 1.f);
 
         bool both;
 
     protected:
         void DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText);
+        void DrawTextInfoWithLines(cv::Mat &im, int nState, cv::Mat &imText);
 
         // Info of the frame to be drawn
         cv::Mat mIm, mImRight;
-        int N;
+        int N, N_Lines;
         vector<cv::KeyPoint> mvCurrentKeys, mvCurrentKeysRight;
-        vector<bool> mvbMap, mvbVO;
+        vector<cv::line_descriptor::KeyLine> mvCurrentLines, mvCurrentLinesRight;
+        vector<bool> mvbMap, mvbVO, mvbMapLine, mvbVOLine;
         bool mbOnlyTracking;
-        int mnTracked, mnTrackedVO;
+        int mnTracked, mnTrackedVO, mnTrackedLine, mnTrackedVOLine;
         vector<cv::KeyPoint> mvIniKeys;
         vector<int> mvIniMatches;
         int mState;

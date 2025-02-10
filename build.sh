@@ -1,6 +1,14 @@
+echo "Configuring and building Thirdparty/line_descriptor ..."
+
+cd Thirdparty/line_descriptor
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j
+
 echo "Configuring and building Thirdparty/DBoW2 ..."
 
-cd Thirdparty/DBoW2
+cd ../../DBoW2
 mkdir build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release

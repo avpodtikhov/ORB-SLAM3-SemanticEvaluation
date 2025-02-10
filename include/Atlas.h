@@ -21,6 +21,7 @@
 
 #include "Map.h"
 #include "MapPoint.h"
+#include "MapLine.h"
 #include "KeyFrame.h"
 #include "GeometricCamera.h"
 #include "Pinhole.h"
@@ -37,6 +38,7 @@ namespace ORB_SLAM3
 class Viewer;
 class Map;
 class MapPoint;
+class MapLine;
 class KeyFrame;
 class KeyFrameDatabase;
 class Frame;
@@ -86,6 +88,7 @@ public:
     // Method for change components in the current map
     static void AddKeyFrame(KeyFrame* pKF);
     static void AddMapPoint(MapPoint* pMP);
+    static void AddMapLine(MapLine* pML);
     //void EraseMapPoint(MapPoint* pMP);
     //void EraseKeyFrame(KeyFrame* pKF);
 
@@ -94,16 +97,20 @@ public:
 
     /* All methods without Map pointer work on current map */
     void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs);
+    void SetReferenceMapLines(const std::vector<MapLine*> &vpMLs);
     void InformNewBigChange();
     int GetLastBigChangeIdx();
 
     long unsigned int MapPointsInMap();
+    long unsigned int MapLinesInMap();
     long unsigned KeyFramesInMap();
 
     // Method for get data in current map
     std::vector<KeyFrame*> GetAllKeyFrames();
     std::vector<MapPoint*> GetAllMapPoints();
+    std::vector<MapLine*> GetAllMapLines();
     std::vector<MapPoint*> GetReferenceMapPoints();
+    std::vector<MapLine*> GetReferenceMapLines();
 
     vector<Map*> GetAllMaps();
 

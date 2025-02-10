@@ -44,6 +44,7 @@ namespace ORB_SLAM3
     {
         // TODO: erase all points from memory
         mspMapPoints.clear();
+        mspMapLines.clear();
 
         // TODO: erase all keyframes from memory
         mspKeyFrames.clear();
@@ -53,6 +54,7 @@ namespace ORB_SLAM3
         mThumbnail = static_cast<GLubyte *>(nullptr);
 
         mvpReferenceMapPoints.clear();
+        mvpReferenceMapLines.clear();
         mvpKeyFrameOrigins.clear();
     }
 
@@ -83,6 +85,12 @@ namespace ORB_SLAM3
         mspMapPoints.insert(make_pair(pMP->mnId, pMP));
     }
 
+    void Map::AddMapLine(MapLine* pML)
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        mspMapLines.insert(make_pair(pML->mnId, pML)); 
+    }
+
     void Map::SetImuInitialized()
     {
         unique_lock<mutex> lock(mMutexMap);
@@ -102,6 +110,14 @@ namespace ORB_SLAM3
 
         // TODO: This only erase the pointer.
         // Delete the MapPoint
+    }
+
+    void Map::EraseMapLine(MapLine *pML)
+    {
+        // unique_lock<mutex> lock(mMutexMap);
+        mspMapLines.erase(pML->mnId);
+
+        // TODO: This only erase the pointer.
     }
 
     void Map::EraseKeyFrame(KeyFrame *pKF)
@@ -135,6 +151,13 @@ namespace ORB_SLAM3
         unique_lock<mutex> lock(mMutexMap);
         mvpReferenceMapPoints = vpMPs;
     }
+
+    void Map::SetReferenceMapLines(const vector<MapLine *> &vpMLs)
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        mvpReferenceMapLines = vpMLs;
+    }
+
 
     void Map::InformNewBigChange()
     {
@@ -170,10 +193,28 @@ namespace ORB_SLAM3
         return vpKFs;
     }
 
+    vector<MapLine*> Map::GetAllMapLines()
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        vector<MapLine*> vpMLs;
+        for (pair<const unsigned long, MapLine *> pMLi : mspMapLines)
+        {
+            vpMLs.push_back(pMLi.second);
+        }
+        return vpMLs;
+    }
+
+
     long unsigned int Map::MapPointsInMap()
     {
         unique_lock<mutex> lock(mMutexMap);
         return mspMapPoints.size();
+    }
+
+    long unsigned int Map::MapLinesInMap()
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        return mspMapLines.size();
     }
 
     long unsigned int Map::KeyFramesInMap()
@@ -187,6 +228,13 @@ namespace ORB_SLAM3
         unique_lock<mutex> lock(mMutexMap);
         return mvpReferenceMapPoints;
     }
+
+    vector<MapLine*> Map::GetReferenceMapLines()
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        return mvpReferenceMapLines;
+    }
+
 
     long unsigned int Map::GetId()
     {
@@ -237,11 +285,19 @@ namespace ORB_SLAM3
             //        delete *sit;
         }
 
+        for (auto &mspMapLine : mspMapLines)
+        {
+            MapLine *pML = mspMapLine.second;
+            pML->UpdateMap(static_cast<Map *>(nullptr));
+        }
+
         mspMapPoints.clear();
+        mspMapLines.clear();
         mspKeyFrames.clear();
         mnMaxKFid = mnInitKFid;
         mbImuInitialized = false;
         mvpReferenceMapPoints.clear();
+        mvpReferenceMapLines.clear();
         mvpKeyFrameOrigins.clear();
         mbIMU_BA1 = false;
         mbIMU_BA2 = false;

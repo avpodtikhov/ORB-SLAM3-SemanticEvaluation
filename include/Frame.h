@@ -133,7 +133,7 @@ namespace ORB_SLAM3
         void ComputeStereoMatches();
 
         // Compute stereo matches for lines
-        void ComputeStereoMatches_Lines();
+        void ComputeStereoMatchesLines();
         float lineSegmentOverlapStereo(float spl_obs, float epl_obs, float spl_proj, float epl_proj);
         void filterLineSegmentDisparity( Eigen::Vector2f spl, Eigen::Vector2f epl, Eigen::Vector2f spr, Eigen::Vector2f epr, float &disp_s, float &disp_e );
 
@@ -220,9 +220,11 @@ namespace ORB_SLAM3
 
         // Vocabulary used for relocalization.
         ORBVocabulary *mpORBvocabulary;
+        LineVocabulary *mpLineVocabulary;
 
         // Feature extractor. The right is used only in the stereo case.
         ORBextractor *mpORBextractorLeft, *mpORBextractorRight;
+        LineExtractor *mpLineExtractorLeft, *mpLineExtractorRight;
 
         // Frame timestamp.
         double mTimeStamp;
@@ -250,6 +252,7 @@ namespace ORB_SLAM3
 
         // Number of KeyPoints.
         int N;
+        int N_Lines;
 
         std::vector<bool> mvKeysMoving;
         std::vector<int> mvSemanticCls, mvInstanceCls;
@@ -316,6 +319,12 @@ namespace ORB_SLAM3
         vector<float> mvLevelSigma2;
         vector<float> mvInvLevelSigma2;
 
+        int mnScaleLevelsLine;
+        vector<float> mvScaleFactorsLine;
+        vector<float> mvInvScaleFactorsLine;
+        vector<float> mvLevelSigma2Line;
+        vector<float> mvInvLevelSigma2Line;
+
         // Undistorted Image Bounds (computed once).
         static float mnMinX;
         static float mnMaxX;
@@ -330,6 +339,29 @@ namespace ORB_SLAM3
         string mNameFile;
 
         int mnDataset;
+
+        // grid cell
+        double inv_width, inv_height; 
+
+        // grid for Lines -> Used for Line Matching By Projection
+        //GridStructure grid_Line;
+
+        int  n_inliers, n_inliers_pt, n_inliers_ls;  
+
+        // Line features
+        std::vector<cv::line_descriptor::KeyLine> mvKeysLine, mvKeysRightLine;
+        std::vector<cv::line_descriptor::KeyLine> mvKeysUnLine;
+        std::vector<MapLine*> mvpMapLines;
+        std::vector<pair<float,float>> mvDepthLine;
+        std::vector<pair<float,float>> mvDisparityLine;
+        std::vector<Eigen::Vector3f> mvleLine;
+        std::vector<Eigen::Vector3f> mv3DpointInPrevFrame;
+        std::vector<pair<Eigen::Vector3f,Eigen::Vector3f>> mv3DlineInPrevFrame;
+        cv::Mat mDescriptorsLine, mDescriptorsRightLine;
+        std::vector<bool> mvbOutlierLine;
+        int mnCloseMLs;
+
+
 
 #ifdef REGISTER_TIMES
         double mTimeORB_Ext;
@@ -354,6 +386,8 @@ namespace ORB_SLAM3
         // Only for the RGB-D case. Stereo must be already rectified!
         // (called in the constructor).
         void UndistortKeyPoints();
+        // Undistort lines given OpenCV distortion parameters.
+        void UndistortLines();
 
         // Computes image bounds for the undistorted image (called in the constructor).
         void ComputeImageBounds(const cv::Mat &imLeft);
@@ -363,7 +397,7 @@ namespace ORB_SLAM3
 
         // Semantic processing methods
         void processSemanticKeyPoints(const cv::Mat &imLeftSem, bool dynamic_flag = false);
-        void updateSemanticInfo(const cv::KeyPoint &kp, const cv::Mat &imLeftSem);
+        void updateSemanticInfo(const unsigned int i, const cv::Mat &imLeftSem);
 
         bool mbIsSet;
 

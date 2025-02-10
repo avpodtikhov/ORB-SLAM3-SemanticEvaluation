@@ -54,9 +54,6 @@ namespace ORB_SLAM3
         {
             refOctave = refKeyframe->mvKeysRight[rightIndex - refKeyframe->NLeft].octave;
         }
-
-        //        projOctave = projKeyframe->mvKeysUn[projIndex].octave;
-        //        refOctave = refKeyframe->mvKeysUn[refIndex].octave;
     }
 
     long unsigned int MapPoint::nNextId = 0;

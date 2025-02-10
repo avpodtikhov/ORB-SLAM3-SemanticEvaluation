@@ -104,15 +104,15 @@ namespace ORB_SLAM3
     void Frame::copyLineFeatures(const Frame& frame) {
         N_Lines = frame.N_Lines;
         mvKeysLine = frame.mvKeysLine;
-        mvKeysLineRight = frame.mvKeysLineRight;
-        mvKeysUnLines = frame.mvKeysUnLines;
+        mvKeysRightLine = frame.mvKeysRightLine;
+        mvKeysUnLine = frame.mvKeysUnLine;
         mvpMapLines = frame.mvpMapLines;
         mvDepthLine = frame.mvDepthLine;
         mDescriptorsLine = frame.mDescriptorsLine.clone();
-        mDescriptorsLineRight = frame.mDescriptorsLineRight.clone();
+        mDescriptorsRightLine = frame.mDescriptorsRightLine.clone();
         mvbOutlierLine = frame.mvbOutlierLine;
         mnCloseMLs = frame.mnCloseMLs;
-        mvle_Lines = frame.mvle_Lines;
+        mvleLine = frame.mvleLine;
     }
 
     void Frame::copyScaleParameters(const Frame& frame) {
@@ -373,7 +373,7 @@ namespace ORB_SLAM3
         mvKeysMoving = vector<bool>(N, false);
 
         for (int i = 0; i < mvKeys.size(); i++) {
-            updateSemanticInfo(mvKeys[i], imLeftSem);
+            updateSemanticInfo(i, imLeftSem);
         }
 
         // This is done only for the first Frame (or after a change in the calibration)
@@ -422,7 +422,7 @@ namespace ORB_SLAM3
 
     //  Semantic Stereo Frame with Lines
     Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight,
-    Lineextractor* LineExtractorLeft, Lineextractor* LineextractorRight, ORBVocabulary *voc, LineVocabulary* voc_line,
+    LineExtractor* LineExtractorLeft, LineExtractor* LineExtractorRight, ORBVocabulary *voc, LineVocabulary* voc_line,
     cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF, const IMU::Calib &ImuCalib, const bool moving_flag, const bool dynamic_flag, const bool semantic_flag, const bool instance_flag)
         : mpcpi(nullptr), mbHasPose(false), mbHasVelocity(false), mpORBvocabulary(voc), mpLineVocabulary(voc_line), mpORBextractorLeft(extractorLeft), mpORBextractorRight(extractorRight), mpLineExtractorLeft(LineExtractorLeft), mpLineExtractorRight(LineExtractorRight), mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)), mDistCoef(distCoef.clone()),
           mbf(bf), mThDepth(thDepth), mImuCalib(ImuCalib), mpImuPreintegrated(nullptr), mpPrevFrame(pPrevF), mpImuPreintegratedFrame(nullptr), mpReferenceKF(static_cast<KeyFrame *>(nullptr)),
@@ -493,7 +493,7 @@ namespace ORB_SLAM3
         mvKeysMoving = vector<bool>(N, false);
 
         for (int i = 0; i < mvKeys.size(); i++) {
-            updateSemanticInfo(mvKeys[i], imLeftSem);
+            updateSemanticInfo(i, imLeftSem);
         }
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_StartExtLine = std::chrono::steady_clock::now();
@@ -509,12 +509,12 @@ namespace ORB_SLAM3
 #endif
         N_Lines = mvKeysLine.size();
        
-        UndistortKeyLines();
+        UndistortLines();
 
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_StartStereoMatches_Lines = std::chrono::steady_clock::now();
 #endif
-        ComputeStereoMatches_Lines();
+        ComputeStereoMatchesLines();
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndStereoMatches_Lines = std::chrono::steady_clock::now();
 
@@ -809,8 +809,9 @@ namespace ORB_SLAM3
         }
     }
 
-    void Frame::updateSemanticInfo(const cv::KeyPoint &kp, const cv::Mat &imLeftSem) {
+    void Frame::updateSemanticInfo(const unsigned int i, const cv::Mat &imLeftSem) {
         bool flag = false;
+        const cv::KeyPoint &kp = mvKeys[i];
         for (int i1 = -5; i1 < 6; i1++) {
             for (int i2 = -5; i2 < 6; i2++) {
                 if (((int)kp.pt.x + i1 < 0) || ((int)kp.pt.x + i1 >= imLeftSem.rows)) {
@@ -899,9 +900,9 @@ namespace ORB_SLAM3
     void Frame::ExtractLine(int flag, const cv::Mat &im)
     {
         if(flag==0)
-            (*mpLineExtractorLeft)(im,cv::Mat(),mvKeys_Line,mDescriptors_Line);
+            (*mpLineExtractorLeft)(im,cv::Mat(),mvKeysLine,mDescriptorsLine);
         else
-            (*mpLineExtractorRight)(im,cv::Mat(),mvKeysRight_Line,mDescriptorsRight_Line);
+            (*mpLineExtractorRight)(im,cv::Mat(),mvKeysRightLine,mDescriptorsRightLine);
     }
 
     bool Frame::isSet() const
@@ -1339,15 +1340,15 @@ namespace ORB_SLAM3
         }
     }
 
-    void Frame::UndistortKeyLines()
+    void Frame::UndistortLines()
     {
         if(mDistCoef.at<float>(0)==0.0)
         {
-            mvKeysUn_Line = mvKeys_Line;
+            mvKeysUnLine = mvKeysLine;
             return;
         }
 
-        N_Lines = mvKeys_Line.size();   // update N_l
+        N_Lines = mvKeysLine.size();   // update N_l
 
         // Fill matrix with points
         cv::Mat mat_s(N_Lines, 2, CV_32F);
@@ -1355,10 +1356,10 @@ namespace ORB_SLAM3
     
         for(int i=0; i < N_Lines; i++)
         {
-            mat_s.at<float>(i,0) = mvKeys_Line[i].startPointX;
-            mat_s.at<float>(i,1) = mvKeys_Line[i].startPointY;
-            mat_e.at<float>(i,0) = mvKeys_Line[i].endPointX;
-            mat_e.at<float>(i,1) = mvKeys_Line[i].endPointY;
+            mat_s.at<float>(i,0) = mvKeysLine[i].startPointX;
+            mat_s.at<float>(i,1) = mvKeysLine[i].startPointY;
+            mat_e.at<float>(i,0) = mvKeysLine[i].endPointX;
+            mat_e.at<float>(i,1) = mvKeysLine[i].endPointY;
         }
 
         // Undistort points
@@ -1372,13 +1373,13 @@ namespace ORB_SLAM3
         mat_e = mat_e.reshape(1);
 
         // Fill undistorted keypoint vector
-        mvKeysUn_Line.resize(N_Lines);
+        mvKeysUnLine.resize(N_Lines);
         for(int i = 0; i < N_Lines; i++)
         { 
-            mvKeysUn_Line[i].startPointX = mat_s.at<float>(i,0);
-            mvKeysUn_Line[i].startPointY = mat_s.at<float>(i,1);
-            mvKeysUn_Line[i].endPointX = mat_e.at<float>(i,0);
-            mvKeysUn_Line[i].endPointY = mat_e.at<float>(i,1);
+            mvKeysUnLine[i].startPointX = mat_s.at<float>(i,0);
+            mvKeysUnLine[i].startPointY = mat_s.at<float>(i,1);
+            mvKeysUnLine[i].endPointX = mat_e.at<float>(i,0);
+            mvKeysUnLine[i].endPointY = mat_e.at<float>(i,1);
         }  
     }
 
@@ -1586,10 +1587,10 @@ namespace ORB_SLAM3
         }
     }
 
-    void Frame::ComputeStereoMatches_Lines()
+    void Frame::ComputeStereoMatchesLines()
     {
         // Depth, Disparity and the 3D vector that expresses the observed inﬁnite line in the image plane
-        mvDepth_Lines.resize(N_Lines,pair<float,float>(-1.0f,-1.0f));
+        mvDepthLine.resize(N_Lines,pair<float,float>(-1.0f,-1.0f));
         // mvDisparity_Lines.clear();
         // mvle_Lines.clear();
         // mvDisparity_Lines.resize(mvKeys_Line.size(),pair<float,float>(-1,-1));
@@ -1597,12 +1598,12 @@ namespace ORB_SLAM3
 
         // Line segments stereo matching
         // --------------------------------------------------------------------------------------------------------------------
-        if (mvKeys_Line.empty() || mvKeysRight_Line.empty())
+        if (mvKeysLine.empty() || mvKeysRightLine.empty())
             return;
 
         std::vector<line_2d> coords;   // line_2d type definition in LineMatcher.h
-        coords.reserve(mvKeys_Line.size());
-        for (const KeyLine &kl : mvKeys_Line)
+        coords.reserve(mvKeysLine.size());
+        for (const cv::line_descriptor::KeyLine &kl : mvKeysLine)
             coords.push_back(std::make_pair(std::make_pair(kl.startPointX * inv_width, kl.startPointY * inv_height),
                                             std::make_pair(kl.endPointX * inv_width, kl.endPointY * inv_height))); 
 
@@ -1610,9 +1611,9 @@ namespace ORB_SLAM3
         list<pair<int, int>> line_coords;
         GridStructure grid(FRAME_GRID_ROWS, FRAME_GRID_COLS);
         
-        std::vector<std::pair<float, float>> directions(mvKeysRight_Line.size());
-        for (unsigned int idx = 0; idx < mvKeysRight_Line.size(); ++idx) {
-            const KeyLine &kl = mvKeysRight_Line[idx];
+        std::vector<std::pair<float, float>> directions(mvKeysRightLine.size());
+        for (unsigned int idx = 0; idx < mvKeysRightLine.size(); ++idx) {
+            const cv::line_descriptor::KeyLine &kl = mvKeysRightLine[idx];
 
             std::pair<float, float> &v = directions[idx];
             v = std::make_pair((kl.endPointX - kl.startPointX) * inv_width, (kl.endPointY - kl.startPointY) * inv_height);
@@ -1630,19 +1631,19 @@ namespace ORB_SLAM3
         w.height = std::make_pair(size_height, size_height);
 
         std::vector<int> matches_12;
-        LineMatcher::matchGrid(coords, mDescriptors_Line, grid, mDescriptorsRight_Line, directions, w, matches_12);
+        LineMatcher::matchGrid(coords, mDescriptorsLine, grid, mDescriptorsRightLine, directions, w, matches_12);
 
         // bucle around left matches
-        cv::Mat mDescriptors_Line_aux;
+        cv::Mat mDescriptorsLineAux;
         for (unsigned int i1 = 0; i1 < matches_12.size(); ++i1) {
             const int i2 = matches_12[i1];
             if (i2 < 0) continue;
 
             // estimate the disparity of the endpoints
-            Eigen::Vector3f sp_l; sp_l << mvKeys_Line[i1].startPointX, mvKeys_Line[i1].startPointY, 1.0;
-            Eigen::Vector3f ep_l; ep_l << mvKeys_Line[i1].endPointX,   mvKeys_Line[i1].endPointY,   1.0;
-            Eigen::Vector3f sp_r; sp_r << mvKeysRight_Line[i2].startPointX, mvKeysRight_Line[i2].startPointY, 1.0;
-            Eigen::Vector3f ep_r; ep_r << mvKeysRight_Line[i2].endPointX,   mvKeysRight_Line[i2].endPointY,   1.0;
+            Eigen::Vector3f sp_l; sp_l << mvKeysLine[i1].startPointX, mvKeysLine[i1].startPointY, 1.0;
+            Eigen::Vector3f ep_l; ep_l << mvKeysLine[i1].endPointX,   mvKeysLine[i1].endPointY,   1.0;
+            Eigen::Vector3f sp_r; sp_r << mvKeysRightLine[i2].startPointX, mvKeysRightLine[i2].startPointY, 1.0;
+            Eigen::Vector3f ep_r; ep_r << mvKeysRightLine[i2].endPointX,   mvKeysRightLine[i2].endPointY,   1.0;
             Eigen::Vector3f le_r; le_r << sp_r.cross(ep_r);
 
             float overlap = lineSegmentOverlapStereo( sp_l(1), ep_l(1), sp_r(1), ep_r(1) );
@@ -1662,7 +1663,7 @@ namespace ORB_SLAM3
                 && overlap > stereoOverlapTh )
             {
                 // mvDisparity_l[i1] = make_pair(disp_s,disp_e);
-                mvDepth_Lines[i1] = pair<float,float>(mbf/float(disp_s), mbf/float(disp_e));
+                mvDepthLine[i1] = pair<float,float>(mbf/float(disp_s), mbf/float(disp_e));
             }
         }
         // for (int i=0; i < N_Lines; i++) {
@@ -1767,17 +1768,17 @@ namespace ORB_SLAM3
 
     bool Frame::UnprojectStereoLines(const int &i, Eigen::Vector3f &x3D_start, Eigen::Vector3f &x3D_end)
     {
-        const pair<float,float> z = mvDepth_Lines[i];
+        const pair<float,float> z = mvDepthLine[i];
         if (z.first > 0 && z.second > 0) {
-            const float us = mvKeysUn_Line[i].startPointX;
-            const float vs = mvKeysUn_Line[i].startPointY;
+            const float us = mvKeysUnLine[i].startPointX;
+            const float vs = mvKeysUnLine[i].startPointY;
             const float xs = (us - cx) * z.first * invfx;
             const float ys = (vs - cy) * z.first * invfy;
             x3D_start = Eigen::Vector3f(xs, ys, z.first);
             x3D_start = mRwc * x3D_start + mOw;
 
-            const float ue = mvKeysUn_Line[i].endPointX;
-            const float ve = mvKeysUn_Line[i].endPointY;
+            const float ue = mvKeysUnLine[i].endPointX;
+            const float ve = mvKeysUnLine[i].endPointY;
             const float xe = (ue - cx) * z.second * invfx;
             const float ye = (ve - cy) * z.second * invfy;
             x3D_end = Eigen::Vector3f(xe, ye, z.second);

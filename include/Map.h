@@ -21,6 +21,7 @@
 #define MAP_H
 
 #include "MapPoint.h"
+#include "MapLine.h"
 #include "KeyFrame.h"
 
 #include <set>
@@ -34,6 +35,7 @@ namespace ORB_SLAM3
 {
 
 class MapPoint;
+class MapLine;
 class KeyFrame;
 class Atlas;
 class KeyFrameDatabase;
@@ -75,17 +77,23 @@ public:
 
     void AddKeyFrame(KeyFrame* pKF);
     void AddMapPoint(MapPoint* pMP);
+    void AddMapLine(MapLine* pML);
     void EraseMapPoint(MapPoint* pMP);
+    void EraseMapLine(MapLine* pML);
     void EraseKeyFrame(KeyFrame* pKF);
     void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs);
+    void SetReferenceMapLines(const std::vector<MapLine*> &vpMLs);
     void InformNewBigChange();
     int GetLastBigChangeIdx();
 
     std::vector<KeyFrame*> GetAllKeyFrames();
     std::vector<MapPoint*> GetAllMapPoints();
+    std::vector<MapLine*> GetAllMapLines();
     std::vector<MapPoint*> GetReferenceMapPoints();
+    std::vector<MapLine*> GetReferenceMapLines();
 
     long unsigned int MapPointsInMap();
+    long unsigned int MapLinesInMap();
     long unsigned  KeyFramesInMap();
 
     long unsigned int GetId();
@@ -142,6 +150,7 @@ public:
 
     // This avoid that two points are created simultaneously in separate threads (id conflict)
     std::mutex mMutexPointCreation;
+    std::mutex mMutexLineCreation;
 
     bool mbFail;
 
@@ -160,6 +169,7 @@ protected:
     long unsigned int mnId;
 
     std::map<long unsigned int,MapPoint*> mspMapPoints;
+    std::map<long unsigned int,MapLine*> mspMapLines;
     std::map<long unsigned int,KeyFrame*> mspKeyFrames;
 
     // Save/load, the set structure is broken in libboost 1.58 for ubuntu 16.04, a vector is serializated
@@ -173,6 +183,7 @@ protected:
     unsigned long int mnBackupKFlowerID;
 
     std::vector<MapPoint*> mvpReferenceMapPoints;
+    std::vector<MapLine*> mvpReferenceMapLines;
 
     bool mbImuInitialized;
 

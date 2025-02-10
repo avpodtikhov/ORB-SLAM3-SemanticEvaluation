@@ -18,6 +18,7 @@
 
 #include "MapDrawer.h"
 #include "MapPoint.h"
+#include "MapLine.h"
 #include "KeyFrame.h"
 #include <pangolin/pangolin.h>
 #include <mutex>
@@ -197,6 +198,51 @@ namespace ORB_SLAM3
             glVertex3f(pos(0), pos(1), pos(2));
         }
 
+        glEnd();
+    }
+
+
+    void MapDrawer::DrawMapLines()
+    {
+        const vector<MapLine*> &vpMLs = mpAtlas->GetAllMapLines();
+        const vector<MapLine*> &vpRefMLs = mpAtlas->GetReferenceMapLines();
+
+        set<MapLine*> spRefMLs(vpRefMLs.begin(), vpRefMLs.end());
+
+        if(vpMLs.empty())
+            return;
+
+        float mLineSize = 1.0;
+
+        glLineWidth(mLineSize);
+        glColor3f(0.0,0.0,0.0);
+        glBegin(GL_LINES);
+        for(size_t i=0, iend=vpMLs.size(); i<iend;i++)
+        {
+            if(vpMLs[i]->isBad() || spRefMLs.count(vpMLs[i]))
+                continue;
+            Eigen::Matrix<float,6,1> sep = vpMLs[i]->GetWorldPos();
+            Eigen::Matrix<float,3,1> sp_eigen = sep.head(3);
+            Eigen::Matrix<float,3,1> ep_eigen = sep.tail(3);
+            glVertex3f(static_cast<float>(sp_eigen(0)),static_cast<float>(sp_eigen(1)),static_cast<float>(sp_eigen(2)));
+            glVertex3f(static_cast<float>(ep_eigen(0)),static_cast<float>(ep_eigen(1)),static_cast<float>(ep_eigen(2)));
+        }
+        glEnd();
+
+        glPointSize(mLineSize);
+        glColor3f(1.0,0.0,0.0);
+        glBegin(GL_LINES);
+        for(set<MapLine*>::iterator sit=spRefMLs.begin(), send=spRefMLs.end(); sit!=send; sit++)
+        {
+            if((*sit)->isBad())
+                continue;
+            Eigen::Matrix<float,6,1> sep = (*sit)->GetWorldPos();
+            Eigen::Matrix<float,3,1> sp_eigen = sep.head(3);
+            Eigen::Matrix<float,3,1> ep_eigen = sep.tail(3);
+            glVertex3f(static_cast<float>(sp_eigen(0)),static_cast<float>(sp_eigen(1)),static_cast<float>(sp_eigen(2)));
+            glVertex3f(static_cast<float>(ep_eigen(0)),static_cast<float>(ep_eigen(1)),static_cast<float>(ep_eigen(2)));
+
+        }
         glEnd();
     }
 

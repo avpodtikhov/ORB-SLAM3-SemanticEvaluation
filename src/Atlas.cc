@@ -113,6 +113,13 @@ namespace ORB_SLAM3
         pMapMP->AddMapPoint(pMP);
     }
 
+    void Atlas::AddMapLine(MapLine* pML)
+    {
+        Map* pMapML = pML->GetMap();
+        pMapML->AddMapLine(pML);
+    } 
+
+
     GeometricCamera *Atlas::AddCamera(GeometricCamera *pCam)
     {
         // Check if the camera already exists
@@ -168,6 +175,12 @@ namespace ORB_SLAM3
         mpCurrentMap->SetReferenceMapPoints(vpMPs);
     }
 
+    void Atlas::SetReferenceMapLines(const std::vector<MapLine*> &vpMLs)
+    {
+        unique_lock<mutex> lock(mMutexAtlas);
+        mpCurrentMap->SetReferenceMapLines(vpMLs);
+    } 
+
     void Atlas::InformNewBigChange()
     {
         unique_lock<mutex> lock(mMutexAtlas);
@@ -185,6 +198,12 @@ namespace ORB_SLAM3
         unique_lock<mutex> lock(mMutexAtlas);
         return mpCurrentMap->MapPointsInMap();
     }
+
+    long unsigned int Atlas::MapLinesInMap()
+    {
+        unique_lock<mutex> lock(mMutexAtlas);
+        return mpCurrentMap->MapLinesInMap();
+    } 
 
     long unsigned Atlas::KeyFramesInMap()
     {
@@ -204,11 +223,23 @@ namespace ORB_SLAM3
         return mpCurrentMap->GetAllMapPoints();
     }
 
+    std::vector<MapLine*> Atlas::GetAllMapLines()
+    {
+        unique_lock<mutex> lock(mMutexAtlas);
+        return mpCurrentMap->GetAllMapLines();
+    } 
+
     std::vector<MapPoint *> Atlas::GetReferenceMapPoints()
     {
         unique_lock<mutex> lock(mMutexAtlas);
         return mpCurrentMap->GetReferenceMapPoints();
     }
+
+    std::vector<MapLine*> Atlas::GetReferenceMapLines()
+    {
+        unique_lock<mutex> lock(mMutexAtlas);
+        return mpCurrentMap->GetReferenceMapLines();
+    } 
 
     vector<Map *> Atlas::GetAllMaps()
     {

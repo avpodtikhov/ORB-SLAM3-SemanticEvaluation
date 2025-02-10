@@ -40,10 +40,6 @@ namespace ORB_SLAM3
         Observation() = default;
         Observation(KeyFrame* projKeyFrame, const tuple<unsigned long int, unsigned long int>& projIndex, KeyFrame* referenceKeyframe, const tuple<unsigned long int, unsigned long int>& referenceKeypointIndex);
 
-        // Observations are matched respect to a reference keyframe and projected to a projection keyframe
-        // ref : reference keyframe
-        // proj : projection keyframe
-
         KeyFrame* projKeyframe{};
         tuple<unsigned long int, unsigned long int>  projIndex{};
 

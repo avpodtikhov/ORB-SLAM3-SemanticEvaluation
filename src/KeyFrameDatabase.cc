@@ -33,6 +33,15 @@ namespace ORB_SLAM3
         mvInvertedFile.resize(voc.size());
     }
 
+    KeyFrameDatabase::KeyFrameDatabase(const ORBVocabulary &voc, const LineVocabulary &voc_l):
+        mpVoc(&voc), mpVocLine(&voc_l)
+    {
+        mvInvertedFile.resize(voc.size());
+        mvInvertedFileLine.resize(voc_l.size());
+    }
+
+    
+
     void KeyFrameDatabase::add(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutex);

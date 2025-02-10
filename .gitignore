@@ -95,7 +95,7 @@ borrar/*
 */ExecMean.txt
 
 *.txt
-
+!CMakeLists.txt
 
 .vscode/
 

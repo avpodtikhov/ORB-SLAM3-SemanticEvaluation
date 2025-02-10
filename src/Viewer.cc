@@ -179,6 +179,7 @@ namespace ORB_SLAM3
         pangolin::Var<bool> menuTopView("menu.Top View", false, false);
         // pangolin::Var<bool> menuSideView("menu.Side View",false,false);
         pangolin::Var<bool> menuShowPoints("menu.Show Points", true, true);
+        pangolin::Var<bool> menuShowLines("menu.Show Lines",true,true);
         pangolin::Var<bool> menuShowKeyFrames("menu.Show KeyFrames", true, true);
         pangolin::Var<bool> menuShowGraph("menu.Show Graph", false, true);
         pangolin::Var<bool> menuShowInertialGraph("menu.Show Inertial Graph", true, true);
@@ -312,11 +313,21 @@ namespace ORB_SLAM3
                 mpMapDrawer->DrawKeyFrames(menuShowKeyFrames, menuShowGraph, menuShowInertialGraph, menuShowOptLba);
             if (menuShowPoints)
                 mpMapDrawer->DrawMapPoints();
+            if(mpTracker->mSensor == mpSystem->STEREO)
+            {
+                if(menuShowLines)
+                    mpMapDrawer->DrawMapLines();
+            }
+
 
             pangolin::FinishFrame();
 
             cv::Mat toShow;
             cv::Mat im = mpFrameDrawer->DrawFrame(trackedImageScale);
+            if(mpTracker->mSensor == mpSystem->STEREO || mpTracker->mSensor == mpSystem->IMU_STEREO)
+                im = mpFrameDrawer->DrawFrameWithLines(true);
+            else
+                im = mpFrameDrawer->DrawFrame(true);
 
             if (both)
             {
@@ -344,6 +355,8 @@ namespace ORB_SLAM3
                 menuShowInertialGraph = true;
                 menuShowKeyFrames = true;
                 menuShowPoints = true;
+                if(mpTracker->mSensor == mpSystem->STEREO || mpTracker->mSensor == mpSystem->IMU_STEREO)
+                    menuShowLines = true;
                 menuLocalizationMode = false;
                 if (bLocalizationMode)
                     mpSystem->DeactivateLocalizationMode();

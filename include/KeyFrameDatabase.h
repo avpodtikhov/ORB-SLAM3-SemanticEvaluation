@@ -59,6 +59,7 @@ public:
 
     KeyFrameDatabase(){}
     KeyFrameDatabase(const ORBVocabulary &voc);
+    KeyFrameDatabase(const ORBVocabulary &voc, const LineVocabulary &voc_l);
 
     void add(KeyFrame* pKF);
 
@@ -86,9 +87,11 @@ protected:
 
    // Associated vocabulary
    const ORBVocabulary* mpVoc;
+   const LineVocabulary* mpVocLine;
 
    // Inverted file
    std::vector<list<KeyFrame*> > mvInvertedFile;
+   std::vector<list<KeyFrame*> > mvInvertedFileLine;
 
    // For save relation without pointer, this is necessary for save/load function
    std::vector<list<long unsigned int> > mvBackupInvertedFileId;
