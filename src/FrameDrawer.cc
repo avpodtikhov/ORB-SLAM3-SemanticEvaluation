@@ -219,107 +219,6 @@ namespace ORB_SLAM3
                     // This is a match to a MapPoint in the map
                     if (vbMap[i])
                     {
-                        // std::cout << vCurrentKeysSemantic[i] << std::endl;
-                        // switch (vCurrentKeysSemantic[i])
-                        // {
-                        // case 0:
-                        //     cv::rectangle(im, pt1, pt2, color0);
-                        // case 1:
-                        //     cv::rectangle(im, pt1, pt2, color1);
-                        // case 2:
-                        //     cv::rectangle(im, pt1, pt2, color2);
-                        // case 3:
-                        //     cv::rectangle(im, pt1, pt2, color3);
-                        // case 4:
-                        //     cv::rectangle(im, pt1, pt2, color4);
-                        // case 5:
-                        //     cv::rectangle(im, pt1, pt2, color5);
-                        // case 6:
-                        //     cv::rectangle(im, pt1, pt2, color6);
-                        // case 7:
-                        //     cv::rectangle(im, pt1, pt2, color7);
-                        // case 8:
-                        //     cv::rectangle(im, pt1, pt2, color8);
-                        // case 9:
-                        //     cv::rectangle(im, pt1, pt2, color9);
-                        // case 10:
-                        //     cv::rectangle(im, pt1, pt2, color10);
-                        // case 11:
-                        //     cv::rectangle(im, pt1, pt2, color11);
-                        // case 12:
-                        //     cv::rectangle(im, pt1, pt2, color12);
-                        // case 13:
-                        //     cv::rectangle(im, pt1, pt2, color13);
-                        // case 14:
-                        //     cv::rectangle(im, pt1, pt2, color14);
-                        // case 15:
-                        //     cv::rectangle(im, pt1, pt2, color15);
-                        // case 16:
-                        //     cv::rectangle(im, pt1, pt2, color16);
-                        // case 17:
-                        //     cv::rectangle(im, pt1, pt2, color17);
-                        // case 18:
-                        //     cv::rectangle(im, pt1, pt2, color18);
-                        // case 19:
-                        //     cv::rectangle(im, pt1, pt2, color19);
-                        // case 20:
-                        //     cv::rectangle(im, pt1, pt2, color20);
-                        // case 21:
-                        //     cv::rectangle(im, pt1, pt2, color21);
-                        // case 22:
-                        //     cv::rectangle(im, pt1, pt2, color22);
-                        // }
-
-                        // switch (vCurrentKeysSemantic[i])
-                        // {
-                        // case 0:
-                        //     cv::circle(im, point, 2, color0, -1);
-                        // case 1:
-                        //     cv::circle(im, point, 2, color1, -1);
-                        // case 2:
-                        //     cv::circle(im, point, 2, color2, -1);
-                        // case 3:
-                        //     cv::circle(im, point, 2, color3, -1);
-                        // case 4:
-                        //     cv::circle(im, point, 2, color4, -1);
-                        // case 5:
-                        //     cv::circle(im, point, 2, color5, -1);
-                        // case 6:
-                        //     cv::circle(im, point, 2, color6, -1);
-                        // case 7:
-                        //     cv::circle(im, point, 2, color7, -1);
-                        // case 8:
-                        //     cv::circle(im, point, 2, color8, -1);
-                        // case 9:
-                        //     cv::circle(im, point, 2, color9, -1);
-                        // case 10:
-                        //     cv::circle(im, point, 2, color10, -1);
-                        // case 11:
-                        //     cv::circle(im, point, 2, color11, -1);
-                        // case 12:
-                        //     cv::circle(im, point, 2, color12, -1);
-                        // case 13:
-                        //     cv::circle(im, point, 2, color13, -1);
-                        // case 14:
-                        //     cv::circle(im, point, 2, color14, -1);
-                        // case 15:
-                        //     cv::circle(im, point, 2, color15, -1);
-                        // case 16:
-                        //     cv::circle(im, point, 2, color16, -1);
-                        // case 17:
-                        //     cv::circle(im, point, 2, color17, -1);
-                        // case 18:
-                        //     cv::circle(im, point, 2, color18, -1);
-                        // case 19:
-                        //     cv::circle(im, point, 2, color19, -1);
-                        // case 20:
-                        //     cv::circle(im, point, 2, color20, -1);
-                        // case 21:
-                        //     cv::circle(im, point, 2, color21, -1);
-                        // case 22:
-                        //     cv::circle(im, point, 2, color22, -1);
-                        // }
-                        // std::cout << vCurrentKeysSemantic[i] << " " << color_palette[vCurrentKeysSemantic[i]] << std::endl;
                         if (vCurrentMapSemantic[i] != vCurrentKeysSemantic[i])
                             cv::rectangle(im, pt1, pt2, color_palette[vCurrentMapSemantic[i]]);
                         cv::circle(im, point, 2, color_palette[vCurrentKeysSemantic[i]], -1);
@@ -462,21 +361,18 @@ namespace ORB_SLAM3
             int nl = vCurrentKeysLine.size();
             for(int i=0; i<nl; ++i)
             {
-                if(vbVOLine[i] || vbMapLine[i])
-                {
-                    cv::Point2f sp, ep;
-                    sp.x = int(vCurrentKeysLine[i].startPointX);
-                    sp.y = int(vCurrentKeysLine[i].startPointY);
-                    ep.x = int(vCurrentKeysLine[i].endPointX);
-                    ep.y = int(vCurrentKeysLine[i].endPointY);
-                    if (vbMapLine[i]) {
-                        cv::line(im, sp, ep, cv::Scalar(0,0,255), 1.5);                     // Red
-                        ++mnTrackedLine;
-                    }
-                    else {
-                        cv::line(im, sp, ep, cv::Scalar(255,0,255), 1.5);                   // Magenta
-                        ++mnTrackedVOLine;
-                    }
+                cv::Point2f sp, ep;
+                sp.x = int(vCurrentKeysLine[i].startPointX);
+                sp.y = int(vCurrentKeysLine[i].startPointY);
+                ep.x = int(vCurrentKeysLine[i].endPointX);
+                ep.y = int(vCurrentKeysLine[i].endPointY);
+                if (vbMapLine[i]) {
+                    cv::line(im, sp, ep, cv::Scalar(0,0,255), 1.5);                     // Red
+                    ++mnTrackedLine;
+                }
+                else {
+                    cv::line(im, sp, ep, cv::Scalar(255,0,255), 1.5);                   // Magenta
+                    ++mnTrackedVOLine;
                 }
             }
         }

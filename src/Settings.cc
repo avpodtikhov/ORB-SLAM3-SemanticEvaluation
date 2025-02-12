@@ -211,6 +211,9 @@ namespace ORB_SLAM3
         readSemanticParams(fSettings);
         cout << "\t-Loaded semantic parameters" << endl;
 
+        readLinesParams(fSettings);
+        cout << "\t-Loaded lines parameters" << endl;
+
         cout << "----------------------------------" << endl;
     }
 
@@ -538,6 +541,19 @@ namespace ORB_SLAM3
         mbUseSemantic = readParameter<bool>(fSettings, "Semantic.UseSemantic", found, false);
         mbUseInstance = readParameter<bool>(fSettings, "Semantic.UseInstance", found, false);
         mbUseLoop = readParameter<bool>(fSettings, "Semantic.UseLoop", found, false);
+    }
+
+    void Settings::readLinesParams(cv::FileStorage &fSettings)
+    {
+        bool found;
+
+        mbUseLines = readParameter<bool>(fSettings, "Lines.UseLines", found, false);
+        mbLinesExtractor = readParameter<int>(fSettings, "Lines.Extractor", found, false);
+        mbLinesNFeatures = readParameter<int>(fSettings, "Lines.NFeatures", found, false);
+        mbLinesLsdRefine = readParameter<int>(fSettings, "Lines.LsdRefine", found, false);
+        mbLinesLsdScale = readParameter<float>(fSettings, "Lines.LsdScale", found, false);
+        mbLinesLevels = readParameter<int>(fSettings, "Lines.Levels", found, false);
+        mbLinesScale = readParameter<float>(fSettings, "Lines.Scale", found, false);
     }
 
     void Settings::readLoadAndSave(cv::FileStorage &fSettings)

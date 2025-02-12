@@ -23,6 +23,11 @@ int main(int argc, char **argv) {
                 return 1;
         }
 
+        std::cout << argv[1] << std::endl;
+        std::cout << argv[2] << std::endl;
+        std::cout << argv[3] << std::endl;
+        std::cout << argv[4] << std::endl;
+
         vector<string> vstrImageLeft;
         vector<string> vstrImageLeftSemantic;
         vector<string> vstrImageLeftSemanticMeta;

@@ -48,19 +48,24 @@ ORBextractor.iniThFAST: 20
 ORBextractor.minThFAST: 7
 
 #--------------------------------------------------------------------------------------------
-# Viewer Parameters
+# Lines Parameters
 #--------------------------------------------------------------------------------------------
-Viewer.KeyFrameSize: 0.6
-Viewer.KeyFrameLineWidth: 2.0
-Viewer.GraphLineWidth: 1.0
-Viewer.PointSize: 2.0
-Viewer.CameraSize: 0.7
-Viewer.CameraLineWidth: 3.0
-Viewer.ViewpointX: 0.0
-Viewer.ViewpointY: -100.0
-Viewer.ViewpointZ: -0.1
-Viewer.ViewpointF: 2000.0
-
+# Use lines to improve localization
+Lines.UseLines: 1
+# Line extractor
+# 0 - LSD
+# 1 - EDLines
+Lines.Extractor: 0
+# Number of Line Features (set to 0 if keeping all lines) -> Used for LSD and ED
+Lines.NFeatures: 0    
+# -> Used Only for LSD
+Lines.LsdRefine: 0    
+# The scale of the image that will be used to find the lines. Range (0..1.0] -> Used Only for LSD
+Lines.LsdScale: 0.8 
+# Levels of the Pyramid (Only 1 and 2 can be selected) -> Used for LSD and ED
+Lines.Levels: 2    
+# Scale factor between levels in the scale pyramid -> Used for LSD and ED
+Lines.Scale: 2.0
 #--------------------------------------------------------------------------------------------
 # Semantic Parameters
 #--------------------------------------------------------------------------------------------
@@ -74,6 +79,18 @@ Semantic.UseSemantic: 0
 Semantic.UseInstance: 0
 # Use semantic to improve loop closure
 Semantic.UseSemanticLoop: 0
+
+
 #--------------------------------------------------------------------------------------------
-# Evaluation Parameters
+# Viewer Parameters
 #--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.6
+Viewer.KeyFrameLineWidth: 2.0
+Viewer.GraphLineWidth: 1.0
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.7
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -100.0
+Viewer.ViewpointZ: -0.1
+Viewer.ViewpointF: 2000.0

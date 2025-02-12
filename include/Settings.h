@@ -127,6 +127,14 @@ namespace ORB_SLAM3 {
         bool useSemantic() const {return mbUseSemantic;}
         bool useInstance() const {return mbUseInstance;}
         bool useLoop() const {return mbUseLoop;}
+
+        bool useLines() const {return mbUseLines;}
+        int linesExtractor() const {return mbLinesExtractor;}
+        int linesNFeatures() const {return mbLinesNFeatures;}
+        int linesLsdRefine() const {return mbLinesLsdRefine;}
+        float linesLsdScale() const {return mbLinesLsdScale;}
+        int linesLevels() const {return mbLinesLevels;}
+        float linesScale() const {return mbLinesScale;}
     private:
         template<typename T>
         T readParameter(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required = true) {
@@ -162,6 +170,7 @@ namespace ORB_SLAM3 {
         void readLoadAndSave(cv::FileStorage& fSettings);
         void readOtherParameters(cv::FileStorage& fSettings);
         void readSemanticParams(cv::FileStorage& fSettings);
+        void readLinesParams(cv::FileStorage& fSettings);
 
         void precomputeRectificationMaps();
 
@@ -232,6 +241,14 @@ namespace ORB_SLAM3 {
         bool mbUseSemantic; 
         bool mbUseInstance;
         bool mbUseLoop;
+
+        bool mbUseLines;
+        int mbLinesExtractor;
+        int mbLinesNFeatures;
+        int mbLinesLsdRefine;
+        float mbLinesLsdScale;
+        int mbLinesLevels;
+        float mbLinesScale;
         /*
          * Save & load maps
          */

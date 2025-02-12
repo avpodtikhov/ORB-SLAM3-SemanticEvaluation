@@ -32,6 +32,7 @@
 #include "ORBVocabulary.h"
 #include "KeyFrameDatabase.h"
 #include "ORBextractor.h"
+#include "LineExtractor.h"
 #include "MapDrawer.h"
 #include "System.h"
 #include "ImuTypes.h"
@@ -123,6 +124,14 @@ public:
     bool mUseSemantic;
     bool mUseInstance;
 
+    bool mUseLines;
+    int mLinesExtractor;
+    int mLinesNFeatures;
+    int mLinesLsdRefine;
+    float mLinesLsdScale;
+    int mLinesLevels;
+    float mLinesScale;
+
     // Tracking states
     enum eTrackingState{
         SYSTEM_NOT_READY=-1,
@@ -202,6 +211,8 @@ protected:
 
     // Main tracking function. It is independent of the input sensor.
     void Track();
+    void TrackDefault();
+    void TrackWithLines();
 
     // Map initialization for stereo and RGB-D
     void StereoInitialization();
@@ -266,9 +277,12 @@ protected:
     //ORB
     ORBextractor* mpORBextractorLeft, *mpORBextractorRight;
     ORBextractor* mpIniORBextractor;
+    LineExtractor* mpLineExtractor;
+    LineExtractor* mpLineExtractorRight;
 
     //BoW
     ORBVocabulary* mpORBVocabulary;
+    LineVocabulary* mpLineVocabulary;
     KeyFrameDatabase* mpKeyFrameDB;
 
     // Initalization (only for monocular)
