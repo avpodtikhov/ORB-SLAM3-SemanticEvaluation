@@ -35,8 +35,13 @@
 #include "Converter.h"
 
 namespace ORB_SLAM3 {
+    const int LineMatcher::TH_HIGH = 120;
 
-    int LineMatcher::matchNNR(const cv::Mat &desc1, const cv::Mat &desc2, float nnr, std::vector<int> &matches_12) {
+    LineMatcher::LineMatcher(float nnratio, float th, float angth) : mfNNratio(nnratio), mTh(th), mAngTh(angth)
+    {
+    }
+
+    int LineMatcher::matchNNR(const cv::Mat &desc1, const cv::Mat &desc2, std::vector<int> &matches_12) {
 
         int matches = 0;
         matches_12.resize(desc1.rows, -1);
@@ -49,7 +54,7 @@ namespace ORB_SLAM3 {
             throw std::runtime_error("[matchNNR] Different size for matches and descriptors!");
 
         for (int idx = 0, nsize = desc1.rows; idx < nsize; ++idx) {
-            if (matches_[idx][0].distance < matches_[idx][1].distance * nnr) {
+            if (matches_[idx][0].distance < matches_[idx][1].distance * mfNNratio) {
                 matches_12[idx] = matches_[idx][0].trainIdx;
                 matches++;
             }
@@ -58,55 +63,93 @@ namespace ORB_SLAM3 {
         return matches;
     }
 
-    int LineMatcher::match(const std::vector<MapLine*> &vpLocalMapLines, Frame &CurrentFrame, float nnr, std::vector<int> &matches_12)
+    // int LineMatcher::match(const std::vector<MapLine*> &vpLocalMapLines, Frame &CurrentFrame, std::vector<int> &matches_12)
+    // {
+
+    //     cv::Mat desc1;
+    //     desc1.reserve(vpLocalMapLines.size());
+    //     for(int i=0,z=vpLocalMapLines.size(); i<z; ++i)
+    //         desc1.push_back(vpLocalMapLines[i]->GetDescriptor());
+    //     cv::Mat desc2;
+    //     CurrentFrame.mDescriptorsLine.copyTo(desc2);
+
+    //     bool bestLRMatches = true; // true if double-checking the matches between the two images
+    //     int matches;
+    //     if (bestLRMatches) {
+    //         std::vector<int> matches_21;
+    //         matches = matchNNR(desc1, desc2, matches_12);
+    //         matchNNR(desc2, desc1, matches_21);
+    //         for (int i1 = 0, nsize = matches_12.size(); i1 < nsize; ++i1) {
+    //             int &i2 = matches_12[i1];
+    //             if (i2 >= 0 && matches_21[i2] != i1) {
+    //                 i2 = -1;
+    //                 matches--;
+    //             }
+    //         }
+    //     }
+    //     else matches = matchNNR(desc1, desc2, matches_12);
+
+    //     return matches;
+    // }
+
+    int LineMatcher::match(KeyFrame *pKF, Frame &F, vector<MapLine *> &vpMapLineMatches, const bool bestLRMatches)
     {
+        const vector<MapLine *> vpMapLinesKF = pKF->GetMapLineMatches();
+        vpMapLineMatches = vector<MapLine *>(F.N_Lines, static_cast<MapLine *>(NULL));
 
-        cv::Mat desc1;
-        desc1.reserve(vpLocalMapLines.size());
-        for(int i=0,z=vpLocalMapLines.size(); i<z; ++i)
-            desc1.push_back(vpLocalMapLines[i]->GetDescriptor());
-        cv::Mat desc2;
-        CurrentFrame.mDescriptorsLine.copyTo(desc2);
+        std::vector<int> matches_12;
+        int matches = matchNNR(pKF->mDescriptorsLine, F.mDescriptorsLine, matches_12);
 
-        bool bestLRMatches = true; // true if double-checking the matches between the two images
-        int matches;
-        if (bestLRMatches) {
+        if (bestLRMatches) 
+        {
             std::vector<int> matches_21;
-            matches = matchNNR(desc1, desc2, nnr, matches_12);
-            matchNNR(desc2, desc1, nnr, matches_21);
-            for (int i1 = 0, nsize = matches_12.size(); i1 < nsize; ++i1) {
+            matchNNR(F.mDescriptorsLine, pKF->mDescriptorsLine, matches_21);
+
+            for (int i1 = 0; i1 < matches_12.size(); ++i1) {
                 int &i2 = matches_12[i1];
-                if (i2 >= 0 && matches_21[i2] != i1) {
-                    i2 = -1;
+                if (i2 < 0 || matches_21[i2] != i1 || 
+                    (F.mvpMapLines[i2] && F.mvpMapLines[i2]->Observations() > 0)) {
                     matches--;
+                    continue;
                 }
+                vpMapLineMatches[i1] = vpMapLinesKF[i2];
+            }
+        } 
+        else 
+        {
+            for (int i1 = 0; i1 < matches_12.size(); ++i1) {
+                int &i2 = matches_12[i1];
+                if (i2 < 0 || (F.mvpMapLines[i2] && F.mvpMapLines[i2]->Observations() > 0)) {
+                    matches--;
+                    continue;
+                }
+                vpMapLineMatches[i1] = vpMapLinesKF[i2];
             }
         }
-        else matches = matchNNR(desc1, desc2, nnr, matches_12);
 
         return matches;
     }
 
-    int LineMatcher::match(const cv::Mat &desc1, const cv::Mat &desc2, float nnr, std::vector<int> &matches_12) {
+    // int LineMatcher::match(const cv::Mat &desc1, const cv::Mat &desc2, std::vector<int> &matches_12) {
 
-        bool bestLRMatches = true; // true if double-checking the matches between the two images
-        if (bestLRMatches) {
-            int matches;
-            std::vector<int> matches_21;
-            matches = matchNNR(desc1, desc2, nnr, matches_12);
-            matchNNR(desc2, desc1, nnr, matches_21);
-            for (int i1 = 0, nsize = matches_12.size(); i1 < nsize; ++i1) {
-                int &i2 = matches_12[i1];
-                if (i2 >= 0 && matches_21[i2] != i1) {
-                    i2 = -1;
-                    matches--;
-                }
-            }
+    //     bool bestLRMatches = true; // true if double-checking the matches between the two images
+    //     if (bestLRMatches) {
+    //         int matches;
+    //         std::vector<int> matches_21;
+    //         matches = matchNNR(desc1, desc2, matches_12);
+    //         matchNNR(desc2, desc1, matches_21);
+    //         for (int i1 = 0, nsize = matches_12.size(); i1 < nsize; ++i1) {
+    //             int &i2 = matches_12[i1];
+    //             if (i2 >= 0 && matches_21[i2] != i1) {
+    //                 i2 = -1;
+    //                 matches--;
+    //             }
+    //         }
 
-            return matches;
-        } else
-            return matchNNR(desc1, desc2, nnr, matches_12);
-    }
+    //         return matches;
+    //     } else
+    //             return matchNNR(desc1, desc2, matches_12);
+    // }
 
     int LineMatcher::distance(const cv::Mat &a, const cv::Mat &b) {
 
@@ -209,10 +252,9 @@ namespace ORB_SLAM3 {
         return matches;
     }
 
-    int LineMatcher::SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const GridStructure &grid, const float &th, const float &angth)
+    int LineMatcher::SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const GridStructure &grid)
     {
         int matches = 0;
-        const int TH_HIGH = 120;
 
         const Sophus::SE3f Tcw = CurrentFrame.GetPose();
         const Eigen::Matrix3f Rcw = Tcw.rotationMatrix();
@@ -248,10 +290,10 @@ namespace ORB_SLAM3 {
                     int nLastOctave = LastFrame.mvKeysLine[i].octave;
 
                     // Search in a window. Size depends on scale
-                    int window = floor(th);
+                    int window = floor(mTh);
 
                     if(CurrentFrame.mvScaleFactorsLine[nLastOctave]>1)
-                        window = floor(th+CurrentFrame.mvScaleFactorsLine[nLastOctave]);
+                        window = floor(mTh+CurrentFrame.mvScaleFactorsLine[nLastOctave]);
 
                     GridWindow win;
                     win.width = std::make_pair(window, window);
@@ -294,7 +336,7 @@ namespace ORB_SLAM3 {
                         float theta = CurrentFrame.mvKeysUnLine[bestidx].angle-atan2(uv_ep.y() - uv_sp.y(), uv_ep.x() - uv_sp.x());;
                         if(theta<-M_PI) theta+=2*M_PI;
                         else if(theta>M_PI) theta-=2*M_PI;
-                        if(fabs(theta)<angth)
+                        if(fabs(theta)<mAngTh)
                         {
                             CurrentFrame.mvpMapLines[bestidx]=pML;
                             matches++;

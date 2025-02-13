@@ -31,6 +31,7 @@
 #include "Frame.h"
 #include "MapPoint.h"
 #include "MapLine.h"
+#include "KeyFrame.h"
 
 #include "Eigen/Core"
 #include "sophus/se3.hpp"
@@ -59,17 +60,29 @@ namespace ORB_SLAM3 {
     class LineMatcher
     {
     public:
-        int static matchNNR(const cv::Mat &desc1, const cv::Mat &desc2, float nnr, std::vector<int> &matches_12);
+        LineMatcher(float nnratio = 0.9, float th = 3.0, float angth = M_PI/8.0);
 
-        int static match(const std::vector<MapLine*> &mvpLocalMapLines, Frame &CurrentFrame, float nnr, std::vector<int> &matches_12);
+        int match(KeyFrame *pKF, Frame &F, vector<MapLine *> &vpMapLineMatches, const bool bestLRMatches);
 
-        int static match(const cv::Mat &desc1, const cv::Mat &desc2, float nnr, std::vector<int> &matches_12);
+        int match(const std::vector<MapLine*> &mvpLocalMapLines, Frame &CurrentFrame, std::vector<int> &matches_12);
 
-        int static distance(const cv::Mat &a, const cv::Mat &b);
+        int match(const cv::Mat &desc1, const cv::Mat &desc2, std::vector<int> &matches_12);
 
-        int static matchGrid(const std::vector<line_2d> &lines1, const cv::Mat &desc1, const GridStructure &grid, const cv::Mat &desc2, const std::vector<std::pair<float, float>> &directions2, const GridWindow &w, std::vector<int> &matches_12);
+        int matchGrid(const std::vector<line_2d> &lines1, const cv::Mat &desc1, const GridStructure &grid, const cv::Mat &desc2, const std::vector<std::pair<float, float>> &directions2, const GridWindow &w, std::vector<int> &matches_12);
 
-        int static SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const GridStructure &grid, const float &th, const float &angth);
+        int SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const GridStructure &grid);
+
+    public:
+        static const int TH_HIGH;
+
+    protected:
+        int matchNNR(const cv::Mat &desc1, const cv::Mat &desc2, std::vector<int> &matches_12);
+
+        int distance(const cv::Mat &a, const cv::Mat &b);
+
+        float mfNNratio;
+        float mTh;
+        float mAngTh;
     };
 
 } // namesapce ORB_SLAM3

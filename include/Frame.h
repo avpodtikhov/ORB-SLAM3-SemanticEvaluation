@@ -280,6 +280,7 @@ namespace ORB_SLAM3
         // MapPoints associated to keypoints, NULL pointer if no association.
         // Flag to identify outlier associations.
         std::vector<bool> mvbOutlier;
+        std::vector<bool> mvbOutlierLines;
         int mnCloseMPs;
 
         // Keypoints are assigned to cells in a grid to reduce matching complexity when projecting MapPoints.

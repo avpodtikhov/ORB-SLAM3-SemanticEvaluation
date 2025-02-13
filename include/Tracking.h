@@ -216,6 +216,7 @@ protected:
 
     // Map initialization for stereo and RGB-D
     void StereoInitialization();
+    void StereoInitializationWithLines();
 
     // Map initialization for monocular
     void MonocularInitialization();
@@ -223,9 +224,17 @@ protected:
     void CreateInitialMapMonocular();
 
     void CheckReplacedInLastFrame();
+    void CheckReplacedInLastFrameWithLines();
+
     bool TrackReferenceKeyFrame();
+    bool TrackReferenceKeyFrameWithLines();
+
     void UpdateLastFrame();
+    void UpdateLastFrameWithLines();
+    
     bool TrackWithMotionModel();
+    bool TrackWithMotionModelWithLines();
+
     bool PredictStateIMU();
 
     bool Relocalization();
@@ -235,10 +244,15 @@ protected:
     void UpdateLocalKeyFrames();
 
     bool TrackLocalMap();
+    bool TrackLocalMapWithLines();
+    
     void SearchLocalPoints();
 
     bool NeedNewKeyFrame();
+    bool NeedNewKeyFrameWithLines();
+
     void CreateNewKeyFrame();
+    void CreateNewKeyFrameWithLines();
 
     // Perform preintegration from last frame
     void PreintegrateIMU();
@@ -293,7 +307,7 @@ protected:
     KeyFrame* mpReferenceKF;
     std::vector<KeyFrame*> mvpLocalKeyFrames;
     std::vector<MapPoint*> mvpLocalMapPoints;
-    
+    std::vector<MapLine*> mvpLocalMapLines;
     // System
     System* mpSystem;
     
@@ -356,7 +370,7 @@ protected:
     bool mbRGB;
 
     list<MapPoint*> mlpTemporalPoints;
-
+    list<MapLine*> mlpTemporalLines;
     //int nMapChangeIndex;
 
     int mnNumDataset;

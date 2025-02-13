@@ -1631,7 +1631,8 @@ namespace ORB_SLAM3
         w.height = std::make_pair(size_height, size_height);
 
         std::vector<int> matches_12;
-        LineMatcher::matchGrid(coords, mDescriptorsLine, grid, mDescriptorsRightLine, directions, w, matches_12);
+        LineMatcher line_matcher;
+        line_matcher.matchGrid(coords, mDescriptorsLine, grid, mDescriptorsRightLine, directions, w, matches_12);
 
         // bucle around left matches
         cv::Mat mDescriptorsLineAux;
