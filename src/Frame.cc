@@ -1592,9 +1592,9 @@ namespace ORB_SLAM3
         // Depth, Disparity and the 3D vector that expresses the observed inﬁnite line in the image plane
         mvDepthLine.resize(N_Lines,pair<float,float>(-1.0f,-1.0f));
         // mvDisparity_Lines.clear();
-        // mvle_Lines.clear();
+        mvleLine.clear();
         // mvDisparity_Lines.resize(mvKeys_Line.size(),pair<float,float>(-1,-1));
-        // mvle_Lines.resize(mvKeys_Line.size(),Vector3d(0,0,0));
+        mvleLine.resize(mvKeysLine.size(),Eigen::Vector3d(0,0,0));
 
         // Line segments stereo matching
         // --------------------------------------------------------------------------------------------------------------------
@@ -1667,12 +1667,12 @@ namespace ORB_SLAM3
                 mvDepthLine[i1] = pair<float,float>(mbf/float(disp_s), mbf/float(disp_e));
             }
         }
-        // for (int i=0; i < N_Lines; i++) {
-        //     Vector3d sp_lun; sp_lun << mvKeysUn_Line[i].startPointX, mvKeysUn_Line[i].startPointY, 1.0;
-        //     Vector3d ep_lun; ep_lun << mvKeysUn_Line[i].endPointX,   mvKeysUn_Line[i].endPointY,   1.0;
-        //     Vector3d le_l; le_l << sp_lun.cross(ep_lun); le_l = le_l / std::sqrt( le_l(0)*le_l(0) + le_l(1)*le_l(1) );
-        //     mvle_Lines[i] = le_l;
-        // }
+        for (int i=0; i < N_Lines; i++) {
+            Eigen::Vector3d sp_lun; sp_lun << mvKeysUnLine[i].startPointX, mvKeysUnLine[i].startPointY, 1.0;
+            Eigen::Vector3d ep_lun; ep_lun << mvKeysUnLine[i].endPointX,   mvKeysUnLine[i].endPointY,   1.0;
+            Eigen::Vector3d le_l; le_l << sp_lun.cross(ep_lun); le_l = le_l / std::sqrt( le_l(0)*le_l(0) + le_l(1)*le_l(1) );
+            mvleLine[i] = le_l;
+        }
     }
 
 

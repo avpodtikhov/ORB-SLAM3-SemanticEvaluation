@@ -1786,7 +1786,7 @@ namespace ORB_SLAM3
         for (int i = 0; i < HISTO_LENGTH; i++)
             rotHist[i].reserve(500);
         const float factor = 1.0f / HISTO_LENGTH;
-
+ 
         const Sophus::SE3f Tcw = CurrentFrame.GetPose();
         const Eigen::Vector3f twc = Tcw.inverse().translation();
 

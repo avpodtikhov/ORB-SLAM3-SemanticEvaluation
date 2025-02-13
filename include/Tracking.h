@@ -240,13 +240,19 @@ protected:
     bool Relocalization();
 
     void UpdateLocalMap();
+    void UpdateLocalMapWithLines();
+
     void UpdateLocalPoints();
+    void UpdateLocalPointsAndLines();
+    
     void UpdateLocalKeyFrames();
+    void UpdateLocalKeyFramesWithLines();
 
     bool TrackLocalMap();
     bool TrackLocalMapWithLines();
     
     void SearchLocalPoints();
+    void SearchLocalPointsAndLines();
 
     bool NeedNewKeyFrame();
     bool NeedNewKeyFrameWithLines();
@@ -348,6 +354,8 @@ protected:
 
     //Current matches in frame
     int mnMatchesInliers;
+    int mnMatchesInliersPoints;
+    int mnMatchesInliersLines;
 
     //Last Frame, KeyFrame and Relocalisation Info
     KeyFrame* mpLastKeyFrame;

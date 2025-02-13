@@ -288,6 +288,230 @@ namespace ORB_SLAM3
 
     }
 
+
+
+    void LocalMapping::RunWithLines()
+    {
+        mbFinished = false;
+
+        // Tracking will see that Local Mapping is busy
+        SetAcceptKeyFrames(false);
+
+        // Check if there are keyframes in the queue
+        if (CheckNewKeyFrames() && !mbBadImu)
+        {
+#ifdef REGISTER_TIMES
+            double timeLBA_ms = 0;
+            double timeKFCulling_ms = 0;
+
+            std::chrono::steady_clock::time_point time_StartProcessKF = std::chrono::steady_clock::now();
+#endif
+            // BoW conversion and insertion in Map
+            ProcessNewKeyFrameWithLines();
+#ifdef REGISTER_TIMES
+            std::chrono::steady_clock::time_point time_EndProcessKF = std::chrono::steady_clock::now();
+
+            double timeProcessKF = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndProcessKF - time_StartProcessKF).count();
+            vdKFInsert_ms.push_back(timeProcessKF);
+#endif
+
+                // Check recent MapPoints
+            MapPointCulling();
+            MapLineCulling();
+#ifdef REGISTER_TIMES
+            std::chrono::steady_clock::time_point time_EndMPCulling = std::chrono::steady_clock::now();
+
+            double timeMPCulling = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndMPCulling - time_EndProcessKF).count();
+            vdMPCulling_ms.push_back(timeMPCulling);
+#endif
+
+                // Triangulate new MapPoints
+            CreateNewMapPoints();
+
+            mbAbortBA = false;
+
+            if (!CheckNewKeyFrames())
+            {
+                // Find more matches in neighbor keyframes and fuse point duplications
+                SearchInNeighbors();
+            }
+
+#ifdef REGISTER_TIMES
+            std::chrono::steady_clock::time_point time_EndMPCreation = std::chrono::steady_clock::now();
+
+            double timeMPCreation = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndMPCreation - time_EndMPCulling).count();
+            vdMPCreation_ms.push_back(timeMPCreation);
+#endif
+
+            bool b_doneLBA = false;
+            int num_FixedKF_BA = 0;
+            int num_OptKF_BA = 0;
+            int num_MPs_BA = 0;
+            int num_edges_BA = 0;
+
+            if (!CheckNewKeyFrames() && !stopRequested())
+            {
+                if (mpAtlas->KeyFramesInMap() > 2)
+                {
+
+                    if (mbInertial && mpCurrentKeyFrame->GetMap()->isImuInitialized())
+                    {
+                        float dist = (mpCurrentKeyFrame->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->GetCameraCenter()).norm() +
+                                        (mpCurrentKeyFrame->mPrevKF->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->mPrevKF->GetCameraCenter()).norm();
+
+                        if (dist > 0.05)
+                            mTinit += mpCurrentKeyFrame->mTimeStamp - mpCurrentKeyFrame->mPrevKF->mTimeStamp;
+                        if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
+                        {
+                            if ((mTinit < 10.f) && (dist < 0.02))
+                            {
+                                cout << "Not enough motion for initializing. Reseting..." << endl;
+                                unique_lock<mutex> lock(mMutexReset);
+                                mbResetRequestedActiveMap = true;
+                                mpMapToReset = mpCurrentKeyFrame->GetMap();
+                                mbBadImu = true;
+                            }
+                        }
+
+                        bool bLarge = ((mpTracker->GetMatchesInliers() > 75) && mbMonocular) || ((mpTracker->GetMatchesInliers() > 100) && !mbMonocular);
+                        Optimizer::LocalInertialBA(mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(), num_FixedKF_BA, num_OptKF_BA, num_MPs_BA, num_edges_BA, bLarge, !mpCurrentKeyFrame->GetMap()->GetIniertialBA2());
+                        b_doneLBA = true;
+                    }
+                    else
+                    {
+                        Optimizer::LocalBundleAdjustmentWithLines(mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(), num_FixedKF_BA, num_OptKF_BA, num_MPs_BA, num_edges_BA);
+                        b_doneLBA = true;
+                    }
+                }
+#ifdef REGISTER_TIMES
+                std::chrono::steady_clock::time_point time_EndLBA = std::chrono::steady_clock::now();
+
+                if (b_doneLBA)
+                {
+                    timeLBA_ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndLBA - time_EndMPCreation).count();
+                    vdLBA_ms.push_back(timeLBA_ms);
+
+                    nLBA_exec += 1;
+                    if (mbAbortBA)
+                    {
+                        nLBA_abort += 1;
+                    }
+                    vnLBA_edges.push_back(num_edges_BA);
+                    vnLBA_KFopt.push_back(num_OptKF_BA);
+                    vnLBA_KFfixed.push_back(num_FixedKF_BA);
+                    vnLBA_MPs.push_back(num_MPs_BA);
+                }
+
+#endif
+
+                // Initialize IMU here
+                if (!mpCurrentKeyFrame->GetMap()->isImuInitialized() && mbInertial)
+                {
+                    if (mbMonocular)
+                        InitializeIMU(1e2, 1e10, true);
+                    else
+                        InitializeIMU(1e2, 1e5, true);
+                }
+
+                // Check redundant local Keyframes
+                KeyFrameCullingWithLines();
+
+#ifdef REGISTER_TIMES
+                std::chrono::steady_clock::time_point time_EndKFCulling = std::chrono::steady_clock::now();
+
+                timeKFCulling_ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndKFCulling - time_EndLBA).count();
+                vdKFCulling_ms.push_back(timeKFCulling_ms);
+#endif
+
+                if ((mTinit < 50.0f) && mbInertial)
+                {
+                    if (mpCurrentKeyFrame->GetMap()->isImuInitialized() && mpTracker->mState == Tracking::OK) // Enter here everytime local-mapping is called
+                    {
+                        if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA1())
+                        {
+                            if (mTinit > 5.0f)
+                            {
+                                cout << "start VIBA 1" << endl;
+                                mpCurrentKeyFrame->GetMap()->SetIniertialBA1();
+                                if (mbMonocular)
+                                    InitializeIMU(1.f, 1e5, true);
+                                else
+                                    InitializeIMU(1.f, 1e5, true);
+
+                                cout << "end VIBA 1" << endl;
+                            }
+                        }
+                        else if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
+                        {
+                            if (mTinit > 15.0f)
+                            {
+                                cout << "start VIBA 2" << endl;
+                                mpCurrentKeyFrame->GetMap()->SetIniertialBA2();
+                                if (mbMonocular)
+                                    InitializeIMU(0.f, 0.f, true);
+                                else
+                                    InitializeIMU(0.f, 0.f, true);
+
+                                cout << "end VIBA 2" << endl;
+                            }
+                        }
+
+                        // scale refinement
+                        if (((mpAtlas->KeyFramesInMap()) <= 200) &&
+                            ((mTinit > 25.0f && mTinit < 25.5f) ||
+                                (mTinit > 35.0f && mTinit < 35.5f) ||
+                                (mTinit > 45.0f && mTinit < 45.5f) ||
+                                (mTinit > 55.0f && mTinit < 55.5f) ||
+                                (mTinit > 65.0f && mTinit < 65.5f) ||
+                                (mTinit > 75.0f && mTinit < 75.5f)))
+                        {
+                            if (mbMonocular)
+                                ScaleRefinement();
+                        }
+                    }
+                }
+            }
+
+#ifdef REGISTER_TIMES
+            vdLBASync_ms.push_back(timeKFCulling_ms);
+            vdKFCullingSync_ms.push_back(timeKFCulling_ms);
+#endif
+        ResetIfRequestedWithLines();
+
+        // Tracking will see that Local Mapping is busy
+        SetAcceptKeyFrames(true);
+
+        if (CheckFinish())
+            SetFinish();
+            return;
+
+        usleep(3000);
+
+        SetFinish();
+        mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
+        mpLoopCloser->Run();
+
+#ifdef REGISTER_TIMES
+            std::chrono::steady_clock::time_point time_EndLocalMap = std::chrono::steady_clock::now();
+
+            double timeLocalMap = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndLocalMap - time_StartProcessKF).count();
+            vdLMTotal_ms.push_back(timeLocalMap);
+#endif
+        }
+        else if (Stop() && !mbBadImu)
+        {
+            // Safe area to stop
+            while (isStopped() && !CheckFinish())
+            {
+                usleep(3000);
+            }
+            if (CheckFinish())
+                SetFinish();
+                return;
+        }
+
+    }
+
     void LocalMapping::InsertKeyFrame(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutexNewKFs);
@@ -343,6 +567,72 @@ namespace ORB_SLAM3
         mpAtlas->AddKeyFrame(mpCurrentKeyFrame);
     }
 
+
+    void LocalMapping::ProcessNewKeyFrameWithLines()
+    {
+        {
+            unique_lock<mutex> lock(mMutexNewKFs);
+            mpCurrentKeyFrame = mlNewKeyFrames.front();
+            mlNewKeyFrames.pop_front();
+        }
+
+        // Compute Bags of Words structures
+        mpCurrentKeyFrame->ComputeBoW();
+
+        // Associate MapPoints to the new keyframe and update normal and descriptor
+        const vector<MapPoint *> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
+
+        for (size_t i = 0; i < vpMapPointMatches.size(); i++)
+        {
+            MapPoint *pMP = vpMapPointMatches[i];
+            if (pMP)
+            {
+                if (!pMP->isBad())
+                {
+                    if (!pMP->IsInKeyFrame(mpCurrentKeyFrame))
+                    {
+                        pMP->AddObservation(mpCurrentKeyFrame, i);
+                        pMP->UpdateNormalAndDepth();
+                        pMP->ComputeDistinctiveDescriptors();
+                    }
+                    else // this can only happen for new stereo points inserted by the Tracking
+                    {
+                        mlpRecentAddedMapPoints.push_back(pMP);
+                    }
+                }
+            }
+        }
+
+        const vector<MapLine *> vpMapLineMatches = mpCurrentKeyFrame->GetMapLineMatches();
+
+        for (size_t i = 0; i < vpMapLineMatches.size(); i++)
+        {
+            MapLine *pML = vpMapLineMatches[i];
+            if (pML)
+            {
+                if (!pML->isBad())
+                {
+                    if (!pML->IsInKeyFrame(mpCurrentKeyFrame))
+                    {
+                        pML->AddObservation(mpCurrentKeyFrame, i);
+                        pML->UpdateNormalAndDepth();
+                        pML->ComputeDistinctiveDescriptors();
+                    }
+                    else // this can only happen for new stereo points inserted by the Tracking
+                    {
+                        mlpRecentAddedMapLines.push_back(pML);
+                    }
+                }
+            }
+        }
+
+        // Update links in the Covisibility Graph
+        mpCurrentKeyFrame->UpdateConnectionsWithLines();
+
+        // Insert Keyframe in Map
+        mpAtlas->AddKeyFrame(mpCurrentKeyFrame);
+    }
+
     void LocalMapping::EmptyQueue()
     {
         while (CheckNewKeyFrames())
@@ -389,6 +679,43 @@ namespace ORB_SLAM3
             }
         }
     }
+
+    void LocalMapping::MapLineCulling()
+    {
+        // Check Recent Added MapLines
+        auto lit = mlpRecentAddedMapLines.begin();
+        const unsigned long int nCurrentKFid = mpCurrentKeyFrame->mnId;
+
+        const int cnThLines = 2;
+
+        int borrar = mlpRecentAddedMapLines.size();
+
+        while (lit != mlpRecentAddedMapLines.end())
+        {
+            MapLine *pML = *lit;
+
+            if (pML->isBad())
+                lit = mlpRecentAddedMapLines.erase(lit);
+            else if (pML->GetFoundRatio() < 0.20f)
+            {
+                pML->SetBadFlag();
+                lit = mlpRecentAddedMapLines.erase(lit);
+            }
+            else if (((int)nCurrentKFid - (int)pML->mnFirstKFid) >= 2 && pML->Observations() <= cnThLines)
+            {
+                pML->SetBadFlag();
+                lit = mlpRecentAddedMapLines.erase(lit);
+            }
+            else if (((int)nCurrentKFid - (int)pML->mnFirstKFid) >= 3)
+                lit = mlpRecentAddedMapLines.erase(lit);
+            else
+            {
+                lit++;
+                borrar--;
+            }
+        }
+    }
+
 
     void LocalMapping::CreateNewMapPoints()
     {
@@ -1058,6 +1385,206 @@ namespace ORB_SLAM3
         }
     }
 
+
+    void LocalMapping::KeyFrameCullingWithLines()
+    {
+        // Check redundant keyframes (only local keyframes)
+        // A keyframe is considered redundant if the 90% of the MapPoints it sees, are seen
+        // in at least other 3 keyframes (in the same or finer scale)
+        // We only consider close stereo points
+        const int Nd = 21;
+        mpCurrentKeyFrame->UpdateBestCovisibles();
+        vector<KeyFrame *> vpLocalKeyFrames = mpCurrentKeyFrame->GetVectorCovisibleKeyFrames();
+
+        float redundant_th;
+        if (!mbInertial)
+            redundant_th = 0.9;
+        else if (mbMonocular)
+            redundant_th = 0.9;
+        else
+            redundant_th = 0.5;
+
+        const bool bInitImu = mpAtlas->isImuInitialized();
+        int count = 0;
+
+        // Compoute last KF from optimizable window:
+        unsigned int last_ID;
+        if (mbInertial)
+        {
+            int count = 0;
+            KeyFrame *aux_KF = mpCurrentKeyFrame;
+            while (count < Nd && aux_KF->mPrevKF)
+            {
+                aux_KF = aux_KF->mPrevKF;
+                count++;
+            }
+            last_ID = aux_KF->mnId;
+        }
+
+        for (auto pKF : vpLocalKeyFrames)
+        {
+            count++;
+            if ((pKF->mnId == pKF->GetMap()->GetInitKFid()) || pKF->isBad())
+                continue;
+            const vector<MapPoint *> vpMapPoints = pKF->GetMapPointMatches();
+
+            int nObs = 3;
+            const int thObs = nObs;
+            int nRedundantObservations = 0;
+            int nMPs = 0;
+            for (size_t i = 0, iend = vpMapPoints.size(); i < iend; i++)
+            {
+                MapPoint *pMP = vpMapPoints[i];
+                if (pMP)
+                {
+                    if (!pMP->isBad())
+                    {
+                        if (!mbMonocular)
+                        {
+                            if (pKF->mvDepth[i] > pKF->mThDepth || pKF->mvDepth[i] < 0)
+                                continue;
+                        }
+
+                        nMPs++;
+                        if (pMP->Observations() > thObs)
+                        {
+                            const int &scaleLevel = (pKF->NLeft == -1) ? pKF->mvKeysUn[i].octave
+                                                    : (i < pKF->NLeft) ? pKF->mvKeys[i].octave
+                                                                       : pKF->mvKeysRight[i].octave;
+                            map<KeyframeId , Observation> observations = pMP->GetObservations();
+                            int nObs = 0;
+                            for (auto & observation : observations)
+                            {
+                                KeyFrame* pKFi = observation.second.projKeyframe;
+                                if (pKFi == pKF)
+                                    continue;
+                                tuple<int, int> indexes = observation.second.projIndex;
+                                int leftIndex = get<0>(indexes), rightIndex = get<1>(indexes);
+                                int scaleLeveli = -1;
+                                if (pKFi->NLeft == -1)
+                                    scaleLeveli = pKFi->mvKeysUn[leftIndex].octave;
+                                else
+                                {
+                                    if (leftIndex != -1)
+                                    {
+                                        scaleLeveli = pKFi->mvKeys[leftIndex].octave;
+                                    }
+                                    if (rightIndex != -1)
+                                    {
+                                        int rightLevel = pKFi->mvKeysRight[rightIndex - pKFi->NLeft].octave;
+                                        scaleLeveli = (scaleLeveli == -1 || scaleLeveli > rightLevel) ? rightLevel
+                                                                                                      : scaleLeveli;
+                                    }
+                                }
+
+                                if (scaleLeveli <= scaleLevel + 1)
+                                {
+                                    nObs++;
+                                    if (nObs > thObs)
+                                        break;
+                                }
+                            }
+                            if (nObs > thObs)
+                            {
+                                nRedundantObservations++;
+                            }
+                        }
+                    }
+                }
+            }
+            const vector<MapLine*> vpMapLines = pKF->GetMapLineMatches();
+
+            int nMLs = 0;
+            for (size_t i = 0, iend = vpMapLines.size(); i < iend; i++)
+            {
+                MapLine *pML = vpMapLines[i];
+                if (pML)
+                {
+                    if (!pML->isBad())
+                    {
+                        if (!mbMonocular)
+                        {
+                            if (pKF->mvDepthLine[i].first > pKF->mThDepth || pKF->mvDepthLine[i].second > pKF->mThDepth || pKF->mvDepthLine[i].first < 0 || pKF->mvDepthLine[i].second < 0)
+                                continue;
+                        }
+
+                        nMLs++;
+                        if (pML->Observations() > thObs)
+                        {
+                            const int &scaleLevel =  pKF->mvKeysUnLine[i].octave;
+                            map<KeyframeId , ObservationLine> observations = pML->GetObservations();
+                            int nObs = 0;
+                            for (auto & observation : observations)
+                            {
+                                KeyFrame* pKFi = observation.second.projKeyframe;
+                                if (pKFi == pKF)
+                                    continue;
+                                int index = observation.second.projIndex;
+                                const int &scaleLeveli = pKFi->mvKeysUnLine[index].octave;
+
+                                if (scaleLeveli <= scaleLevel + 1)
+                                {
+                                    nObs++;
+                                    if (nObs >= thObs)
+                                        break;
+                                }
+                            }
+                            if (nObs >= thObs)
+                            {
+                                nRedundantObservations++;
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            if (nRedundantObservations > redundant_th * (nMPs + nMLs))
+            {
+                if (mbInertial)
+                {
+                    if (mpAtlas->KeyFramesInMap() <= Nd)
+                        continue;
+
+                    if (pKF->mnId > (mpCurrentKeyFrame->mnId - 2))
+                        continue;
+
+                    if (pKF->mPrevKF && pKF->mNextKF)
+                    {
+                        const float t = pKF->mNextKF->mTimeStamp - pKF->mPrevKF->mTimeStamp;
+
+                        if ((bInitImu && (pKF->mnId < last_ID) && t < 3.) || (t < 0.5))
+                        {
+                            pKF->mNextKF->mpImuPreintegrated->MergePrevious(pKF->mpImuPreintegrated);
+                            pKF->mNextKF->mPrevKF = pKF->mPrevKF;
+                            pKF->mPrevKF->mNextKF = pKF->mNextKF;
+                            pKF->mNextKF = NULL;
+                            pKF->mPrevKF = NULL;
+                            pKF->SetBadFlag();
+                        }
+                        else if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA2() && ((pKF->GetImuPosition() - pKF->mPrevKF->GetImuPosition()).norm() < 0.02) && (t < 3))
+                        {
+                            pKF->mNextKF->mpImuPreintegrated->MergePrevious(pKF->mpImuPreintegrated);
+                            pKF->mNextKF->mPrevKF = pKF->mPrevKF;
+                            pKF->mPrevKF->mNextKF = pKF->mNextKF;
+                            pKF->mNextKF = NULL;
+                            pKF->mPrevKF = NULL;
+                            pKF->SetBadFlag();
+                        }
+                    }
+                }
+                else
+                {
+                    pKF->SetBadFlagWithLines();
+                }
+            }
+            if ((count > 20 && mbAbortBA) || count > 100)
+            {
+                break;
+            }
+        }
+    }
+
     void LocalMapping::RequestReset()
     {
         {
@@ -1135,6 +1662,56 @@ namespace ORB_SLAM3
                 cout << "LM: Reseting current map in Local Mapping..." << endl;
                 mlNewKeyFrames.clear();
                 mlpRecentAddedMapPoints.clear();
+
+                // Inertial parameters
+                mTinit = 0.f;
+                mbNotBA2 = true;
+                mbNotBA1 = true;
+                mbBadImu = false;
+
+                mbResetRequested = false;
+                mbResetRequestedActiveMap = false;
+                cout << "LM: End reseting Local Mapping..." << endl;
+            }
+        }
+        if (executed_reset)
+            cout << "LM: Reset free the mutex" << endl;
+    }
+
+    void LocalMapping::ResetIfRequestedWithLines()
+    {
+        bool executed_reset = false;
+        {
+            // unique_lock<mutex> lock(mMutexReset);
+            if (mbResetRequested)
+            {
+                executed_reset = true;
+
+                cout << "LM: Reseting Atlas in Local Mapping..." << endl;
+                mlNewKeyFrames.clear();
+                mlpRecentAddedMapPoints.clear();
+                mlpRecentAddedMapLines.clear();
+                mbResetRequested = false;
+                mbResetRequestedActiveMap = false;
+
+                // Inertial parameters
+                mTinit = 0.f;
+                mbNotBA2 = true;
+                mbNotBA1 = true;
+                mbBadImu = false;
+
+                mIdxInit = 0;
+
+                cout << "LM: End reseting Local Mapping..." << endl;
+            }
+
+            if (mbResetRequestedActiveMap)
+            {
+                executed_reset = true;
+                cout << "LM: Reseting current map in Local Mapping..." << endl;
+                mlNewKeyFrames.clear();
+                mlpRecentAddedMapPoints.clear();
+                mlpRecentAddedMapLines.clear();
 
                 // Inertial parameters
                 mTinit = 0.f;

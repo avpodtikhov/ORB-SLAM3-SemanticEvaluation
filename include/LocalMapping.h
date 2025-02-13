@@ -51,6 +51,7 @@ public:
 
     // Main function
     void Run();
+    void RunWithLines();
 
     void InsertKeyFrame(KeyFrame* pKF);
     void EmptyQueue();
@@ -138,12 +139,19 @@ public:
 protected:
 
     bool CheckNewKeyFrames();
+
     void ProcessNewKeyFrame();
+    void ProcessNewKeyFrameWithLines();
+
     void CreateNewMapPoints();
 
     void MapPointCulling();
+    void MapLineCulling();
+
     void SearchInNeighbors();
+    
     void KeyFrameCulling();
+    void KeyFrameCullingWithLines();
 
     System *mpSystem;
 
@@ -151,6 +159,8 @@ protected:
     bool mbInertial;
 
     void ResetIfRequested();
+    void ResetIfRequestedWithLines();
+
     bool mbResetRequested;
     bool mbResetRequestedActiveMap;
     Map* mpMapToReset;
@@ -172,7 +182,8 @@ protected:
     KeyFrame* mpCurrentKeyFrame;
 
     std::list<MapPoint*> mlpRecentAddedMapPoints;
-
+    std::list<MapLine*> mlpRecentAddedMapLines;
+    
     std::mutex mMutexNewKFs;
 
     bool mbAbortBA;

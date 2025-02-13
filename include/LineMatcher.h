@@ -64,13 +64,17 @@ namespace ORB_SLAM3 {
 
         int match(KeyFrame *pKF, Frame &F, vector<MapLine *> &vpMapLineMatches, const bool bestLRMatches);
 
-        int match(const std::vector<MapLine*> &mvpLocalMapLines, Frame &CurrentFrame, std::vector<int> &matches_12);
-
-        int match(const cv::Mat &desc1, const cv::Mat &desc2, std::vector<int> &matches_12);
+        int SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const bool bestLRMatches);
+    
+        int SearchByProjection(Frame &CurrentFrame, vector<MapLine*> &vpMapLines, const bool bestLRMatches);
 
         int matchGrid(const std::vector<line_2d> &lines1, const cv::Mat &desc1, const GridStructure &grid, const cv::Mat &desc2, const std::vector<std::pair<float, float>> &directions2, const GridWindow &w, std::vector<int> &matches_12);
 
-        int SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const GridStructure &grid);
+        // int match(const std::vector<MapLine*> &mvpLocalMapLines, Frame &CurrentFrame, std::vector<int> &matches_12);
+
+        // int match(const cv::Mat &desc1, const cv::Mat &desc2, std::vector<int> &matches_12);
+
+        // int SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const GridStructure &grid);
 
     public:
         static const int TH_HIGH;

@@ -130,6 +130,204 @@ namespace ORB_SLAM3 {
         return matches;
     }
 
+    int LineMatcher::SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const bool bestLRMatches) {
+
+        std::vector<int> matches_12;
+        int matches = matchNNR(LastFrame.mDescriptorsLine, CurrentFrame.mDescriptorsLine, matches_12);
+
+        const double deltaWidth = (CurrentFrame.mnMaxX-CurrentFrame.mnMinX)*0.1;
+        const double deltaHeight = (CurrentFrame.mnMaxY-CurrentFrame.mnMinY)*0.1;
+
+        const Sophus::SE3f Tcw = CurrentFrame.GetPose();
+        const Eigen::Vector3f twc = Tcw.inverse().translation();
+
+        auto checkMatch = [&](int i1, int i2) -> bool {
+            // Project In Image
+            const Eigen::Vector3f x3Dw_sp = LastFrame.mvpMapLines[i1]->GetWorldPos().head(3);
+            const Eigen::Vector3f x3Dw_ep = LastFrame.mvpMapLines[i1]->GetWorldPos().tail(3);
+
+            Eigen::Vector3f x3Dc_sp = Tcw * x3Dw_sp + twc;
+            Eigen::Vector3f x3Dc_ep = Tcw * x3Dw_ep + twc;
+
+            const float invzc_sp = 1.0f / x3Dc_sp(2);
+            const float invzc_ep = 1.0f / x3Dc_ep(2);
+
+            if(invzc_sp < 0 || invzc_ep < 0) {
+                return false;
+            }
+
+            Eigen::Vector2f uv_sp = CurrentFrame.mpCamera->project(x3Dc_sp);
+            Eigen::Vector2f uv_ep = CurrentFrame.mpCamera->project(x3Dc_ep);
+            
+            if(uv_sp.x() < CurrentFrame.mnMinX || uv_sp.x() > CurrentFrame.mnMaxX || 
+               uv_ep.x() < CurrentFrame.mnMinX || uv_ep.x() > CurrentFrame.mnMaxX ||
+               uv_sp.y() < CurrentFrame.mnMinY || uv_sp.y() > CurrentFrame.mnMaxY || 
+               uv_ep.y() < CurrentFrame.mnMinY || uv_ep.y() > CurrentFrame.mnMaxY)
+                return false;
+            
+            // Check for orientation
+            float theta = CurrentFrame.mvKeysUnLine[i2].angle - atan2(uv_ep.y() - uv_sp.y(), uv_ep.x() - uv_sp.x());
+
+            if (theta < -M_PI) theta += 2*M_PI;
+            else if (theta > M_PI) theta -= 2*M_PI;
+            if(fabs(theta) > mAngTh)
+                return false;
+
+            // check for position in image
+            const auto& currLine = CurrentFrame.mvKeysUnLine[i2];
+            if(fabs(currLine.startPointX - uv_sp.x()) > deltaWidth || 
+               fabs(currLine.endPointX - uv_ep.x()) > deltaWidth || 
+               fabs(currLine.startPointY - uv_sp.y()) > deltaHeight || 
+               fabs(currLine.endPointY - uv_ep.y()) > deltaHeight)
+                return false;
+
+            return true;
+        };
+
+        if (bestLRMatches) {
+            std::vector<int> matches_21;
+            matchNNR(CurrentFrame.mDescriptorsLine, LastFrame.mDescriptorsLine, matches_21);
+
+            for (int i1 = 0; i1 < matches_12.size(); ++i1) {
+                int &i2 = matches_12[i1];
+                if (i2 < 0 || matches_21[i2] != i1 || 
+                    (CurrentFrame.mvpMapLines[i2] && CurrentFrame.mvpMapLines[i2]->Observations() > 0)) {
+                    matches--;
+                    continue;
+                }
+
+                if (!checkMatch(i1, i2)) {
+                    matches--;
+                    continue;
+                }
+                
+                CurrentFrame.mvpMapLines[i2] = LastFrame.mvpMapLines[i1];
+            }
+        } else {
+            for (int i1 = 0; i1 < matches_12.size(); ++i1) {
+                int &i2 = matches_12[i1];
+                if (i2 < 0 || (CurrentFrame.mvpMapLines[i2] && CurrentFrame.mvpMapLines[i2]->Observations() > 0)) {
+                    matches--;
+                    continue;
+                }
+
+                if (!checkMatch(i1, i2)) {
+                    matches--;
+                    continue;
+                }
+                
+                CurrentFrame.mvpMapLines[i2] = LastFrame.mvpMapLines[i1];
+            }
+        }
+
+        return matches;
+    }
+
+    int LineMatcher::SearchByProjection(Frame &CurrentFrame, vector<MapLine*> &vpMapLines, const bool bestLRMatches) {
+
+        cv::Mat desc1;
+        desc1.reserve(vpMapLines.size());
+
+        for (int i = 0,z = vpMapLines.size(); i < z; ++i)
+            desc1.push_back(vpMapLines[i]->GetDescriptor());
+
+
+        std::vector<int> matches_12;
+        int matches = matchNNR(desc1, CurrentFrame.mDescriptorsLine, matches_12);
+
+        const double deltaWidth = (CurrentFrame.mnMaxX-CurrentFrame.mnMinX)*0.1;
+        const double deltaHeight = (CurrentFrame.mnMaxY-CurrentFrame.mnMinY)*0.1;
+
+        const Sophus::SE3f Tcw = CurrentFrame.GetPose();
+        const Eigen::Vector3f twc = Tcw.inverse().translation();
+
+
+        auto checkMatch = [&](int i1, int i2) -> bool {
+            MapLine* pML = vpMapLines[i1];
+            float theta = CurrentFrame.mvKeysUnLine[i2].angle - pML->mnTrackangle;
+
+            if (theta < -M_PI) theta += 2 * M_PI;
+            else if (theta > M_PI) theta -= 2 * M_PI;
+
+            if (fabs(theta) > mAngTh)
+                return false;
+
+            // check for position in image
+            const float sX_curr = CurrentFrame.mvKeysUnLine[i2].startPointX;
+            const float sX_last = pML->mTrackProjsX;
+            const float sY_curr = CurrentFrame.mvKeysUnLine[i2].startPointY;
+            const float sY_last = pML->mTrackProjsY;
+            const float eX_curr = CurrentFrame.mvKeysUnLine[i2].endPointX;
+            const float eX_last = pML->mTrackProjeX;
+            const float eY_curr = CurrentFrame.mvKeysUnLine[i2].endPointY;
+            const float eY_last = pML->mTrackProjeY;
+
+            if(fabs(sX_curr - sX_last) > deltaWidth || 
+               fabs(eX_curr - eX_last) > deltaWidth || 
+               fabs(sY_curr - sY_last) > deltaHeight || 
+               fabs(eY_curr - eY_last) > deltaHeight)
+                return false;
+
+            return true;
+        };
+
+        if (bestLRMatches) {
+            std::vector<int> matches_21;
+            matchNNR(CurrentFrame.mDescriptorsLine, desc1, matches_21);
+
+            for (int i1 = 0; i1 < matches_12.size(); ++i1) {
+                int &i2 = matches_12[i1];
+                if (i2 < 0 || matches_21[i2] != i1 || 
+                    (CurrentFrame.mvpMapLines[i2] && CurrentFrame.mvpMapLines[i2]->Observations() > 0)) {
+                    matches--;
+                    continue;
+                }
+
+                if (!checkMatch(i1, i2)) {
+                    matches--;
+                    continue;
+                }
+                
+                CurrentFrame.mvpMapLines[i2] = vpMapLines[i1];
+            }
+        } else {
+            for (int i1 = 0; i1 < matches_12.size(); ++i1) {
+                int &i2 = matches_12[i1];
+                if (i2 < 0 || (CurrentFrame.mvpMapLines[i2] && CurrentFrame.mvpMapLines[i2]->Observations() > 0)) {
+                    matches--;
+                    continue;
+                }
+
+                if (!checkMatch(i1, i2)) {
+                    matches--;
+                    continue;
+                }
+                
+                CurrentFrame.mvpMapLines[i2] = vpMapLines[i1];
+            }
+        }
+
+        return matches;
+    }
+
+    int LineMatcher::distance(const cv::Mat &a, const cv::Mat &b) {
+
+        // adapted from: http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
+
+        const int *pa = a.ptr<int32_t>();
+        const int *pb = b.ptr<int32_t>();
+
+        int dist = 0;
+        for(int i = 0; i < 8; i++, pa++, pb++) {
+            unsigned  int v = *pa ^ *pb;
+            v = v - ((v >> 1) & 0x55555555);
+            v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
+            dist += (((v + (v >> 4)) & 0xF0F0F0F) * 0x1010101) >> 24;
+        }
+
+        return dist;
+    }
+
     // int LineMatcher::match(const cv::Mat &desc1, const cv::Mat &desc2, std::vector<int> &matches_12) {
 
     //     bool bestLRMatches = true; // true if double-checking the matches between the two images
@@ -151,23 +349,6 @@ namespace ORB_SLAM3 {
     //             return matchNNR(desc1, desc2, matches_12);
     // }
 
-    int LineMatcher::distance(const cv::Mat &a, const cv::Mat &b) {
-
-        // adapted from: http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
-
-        const int *pa = a.ptr<int32_t>();
-        const int *pb = b.ptr<int32_t>();
-
-        int dist = 0;
-        for(int i = 0; i < 8; i++, pa++, pb++) {
-            unsigned  int v = *pa ^ *pb;
-            v = v - ((v >> 1) & 0x55555555);
-            v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
-            dist += (((v + (v >> 4)) & 0xF0F0F0F) * 0x1010101) >> 24;
-        }
-
-        return dist;
-    }
 
     int LineMatcher::matchGrid(const std::vector<line_2d> &lines1, const cv::Mat &desc1,
                 const GridStructure &grid, const cv::Mat &desc2, const std::vector<std::pair<float, float>> &directions2,
@@ -252,101 +433,101 @@ namespace ORB_SLAM3 {
         return matches;
     }
 
-    int LineMatcher::SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const GridStructure &grid)
-    {
-        int matches = 0;
+    // int LineMatcher::SearchByProjection(Frame &CurrentFrame, Frame &LastFrame, const GridStructure &grid)
+    // {
+    //     int matches = 0;
 
-        const Sophus::SE3f Tcw = CurrentFrame.GetPose();
-        const Eigen::Matrix3f Rcw = Tcw.rotationMatrix();
-        const Eigen::Vector3f tcw = Tcw.translation();
+    //     const Sophus::SE3f Tcw = CurrentFrame.GetPose();
+    //     const Eigen::Matrix3f Rcw = Tcw.rotationMatrix();
+    //     const Eigen::Vector3f tcw = Tcw.translation();
 
-        for(int i=0; i<LastFrame.N_Lines; i++)
-        {
-            MapLine* pML = LastFrame.mvpMapLines[i];
-            if(pML)
-            {
-                if(!LastFrame.mvbOutlierLine[i])
-                {
-                    // Project Lines to the Image
-                    Eigen::Vector3f x3Dw_sp = pML->GetWorldPos().head(3);
-                    Eigen::Vector3f x3Dw_ep = pML->GetWorldPos().tail(3);
-                    Eigen::Vector3f x3Dc_sp = Rcw * x3Dw_sp +tcw;
-                    Eigen::Vector3f x3Dc_ep = Rcw * x3Dw_ep +tcw;
+    //     for(int i=0; i<LastFrame.N_Lines; i++)
+    //     {
+    //         MapLine* pML = LastFrame.mvpMapLines[i];
+    //         if(pML)
+    //         {
+    //             if(!LastFrame.mvbOutlierLine[i])
+    //             {
+    //                 // Project Lines to the Image
+    //                 Eigen::Vector3f x3Dw_sp = pML->GetWorldPos().head(3);
+    //                 Eigen::Vector3f x3Dw_ep = pML->GetWorldPos().tail(3);
+    //                 Eigen::Vector3f x3Dc_sp = Rcw * x3Dw_sp +tcw;
+    //                 Eigen::Vector3f x3Dc_ep = Rcw * x3Dw_ep +tcw;
 
-                    const float invzc_sp = 1.0 / x3Dc_sp(2);
-                    const float invzc_ep = 1.0 / x3Dc_ep(2);
+    //                 const float invzc_sp = 1.0 / x3Dc_sp(2);
+    //                 const float invzc_ep = 1.0 / x3Dc_ep(2);
 
-                    if(invzc_sp<0 || invzc_ep<0)
-                        continue;
+    //                 if(invzc_sp<0 || invzc_ep<0)
+    //                     continue;
 
-                    Eigen::Vector2f uv_sp = CurrentFrame.mpCamera->project(x3Dc_sp);
-                    Eigen::Vector2f uv_ep = CurrentFrame.mpCamera->project(x3Dc_ep);
+    //                 Eigen::Vector2f uv_sp = CurrentFrame.mpCamera->project(x3Dc_sp);
+    //                 Eigen::Vector2f uv_ep = CurrentFrame.mpCamera->project(x3Dc_ep);
 
-                    if(uv_sp.x() < CurrentFrame.mnMinX || uv_sp.x() > CurrentFrame.mnMaxX || uv_ep.x() < CurrentFrame.mnMinX || uv_ep.x() > CurrentFrame.mnMaxX)
-                        continue;
-                    if(uv_sp.y() < CurrentFrame.mnMinY || uv_sp.y() > CurrentFrame.mnMaxY || uv_ep.y() < CurrentFrame.mnMinY || uv_ep.y() > CurrentFrame.mnMaxY)
-                        continue;
+    //                 if(uv_sp.x() < CurrentFrame.mnMinX || uv_sp.x() > CurrentFrame.mnMaxX || uv_ep.x() < CurrentFrame.mnMinX || uv_ep.x() > CurrentFrame.mnMaxX)
+    //                     continue;
+    //                 if(uv_sp.y() < CurrentFrame.mnMinY || uv_sp.y() > CurrentFrame.mnMaxY || uv_ep.y() < CurrentFrame.mnMinY || uv_ep.y() > CurrentFrame.mnMaxY)
+    //                     continue;
 
-                    int nLastOctave = LastFrame.mvKeysLine[i].octave;
+    //                 int nLastOctave = LastFrame.mvKeysLine[i].octave;
 
-                    // Search in a window. Size depends on scale
-                    int window = floor(mTh);
+    //                 // Search in a window. Size depends on scale
+    //                 int window = floor(mTh);
 
-                    if(CurrentFrame.mvScaleFactorsLine[nLastOctave]>1)
-                        window = floor(mTh+CurrentFrame.mvScaleFactorsLine[nLastOctave]);
+    //                 if(CurrentFrame.mvScaleFactorsLine[nLastOctave]>1)
+    //                     window = floor(mTh+CurrentFrame.mvScaleFactorsLine[nLastOctave]);
 
-                    GridWindow win;
-                    win.width = std::make_pair(window, window);
-                    win.height = std::make_pair(window, window);
+    //                 GridWindow win;
+    //                 win.width = std::make_pair(window, window);
+    //                 win.height = std::make_pair(window, window);
 
-                    const line_2d coords = std::make_pair(std::make_pair(uv_sp.x() * CurrentFrame.inv_width, uv_sp.y() * CurrentFrame.inv_height),
-                                            std::make_pair(uv_ep.x() * CurrentFrame.inv_width, uv_ep.y() * CurrentFrame.inv_height)); 
+    //                 const line_2d coords = std::make_pair(std::make_pair(uv_sp.x() * CurrentFrame.inv_width, uv_sp.y() * CurrentFrame.inv_height),
+    //                                         std::make_pair(uv_ep.x() * CurrentFrame.inv_width, uv_ep.y() * CurrentFrame.inv_height)); 
 
-                    const point_2d spoint = coords.first;
-                    const point_2d epoint = coords.second;
+    //                 const point_2d spoint = coords.first;
+    //                 const point_2d epoint = coords.second;
 
-                    std::unordered_set<int> candidates;
-                    grid.get(spoint.first, spoint.second, win, candidates);
-                    grid.get(epoint.first, epoint.second, win, candidates);
+    //                 std::unordered_set<int> candidates;
+    //                 grid.get(spoint.first, spoint.second, win, candidates);
+    //                 grid.get(epoint.first, epoint.second, win, candidates);
 
-                    if (candidates.empty()) continue;
+    //                 if (candidates.empty()) continue;
 
-                    const cv::Mat dML = pML->GetDescriptor();
+    //                 const cv::Mat dML = pML->GetDescriptor();
 
-                    int bestDist = 256;
-                    int bestidx = -1;
+    //                 int bestDist = 256;
+    //                 int bestidx = -1;
 
-                    for (const int &i2 : candidates) 
-                    {
-                        if(CurrentFrame.mvpMapLines[i2])
-                            if(CurrentFrame.mvpMapLines[i2]->Observations()>0)
-                                continue;
+    //                 for (const int &i2 : candidates) 
+    //                 {
+    //                     if(CurrentFrame.mvpMapLines[i2])
+    //                         if(CurrentFrame.mvpMapLines[i2]->Observations()>0)
+    //                             continue;
 
-                        const int dist = distance(dML, CurrentFrame.mDescriptorsLine.row(i2));
+    //                     const int dist = distance(dML, CurrentFrame.mDescriptorsLine.row(i2));
 
-                        if(dist<bestDist)
-                        {
-                            bestDist=dist;
-                            bestidx=i2;
-                        }
-                    }
+    //                     if(dist<bestDist)
+    //                     {
+    //                         bestDist=dist;
+    //                         bestidx=i2;
+    //                     }
+    //                 }
 
-                    if(bestDist<=TH_HIGH)
-                    {
-                        float theta = CurrentFrame.mvKeysUnLine[bestidx].angle-atan2(uv_ep.y() - uv_sp.y(), uv_ep.x() - uv_sp.x());;
-                        if(theta<-M_PI) theta+=2*M_PI;
-                        else if(theta>M_PI) theta-=2*M_PI;
-                        if(fabs(theta)<mAngTh)
-                        {
-                            CurrentFrame.mvpMapLines[bestidx]=pML;
-                            matches++;
-                        }
-                    }
+    //                 if(bestDist<=TH_HIGH)
+    //                 {
+    //                     float theta = CurrentFrame.mvKeysUnLine[bestidx].angle-atan2(uv_ep.y() - uv_sp.y(), uv_ep.x() - uv_sp.x());;
+    //                     if(theta<-M_PI) theta+=2*M_PI;
+    //                     else if(theta>M_PI) theta-=2*M_PI;
+    //                     if(fabs(theta)<mAngTh)
+    //                     {
+    //                         CurrentFrame.mvpMapLines[bestidx]=pML;
+    //                         matches++;
+    //                     }
+    //                 }
 
-                }
-            }
-        }
-        return matches;
-    }
+    //             }
+    //         }
+    //     }
+    //     return matches;
+    // }
 
 } //namesapce ORB_SLAM3
