@@ -214,6 +214,89 @@ public:
 
 };
 
+
+class  EdgeLineSE3ProjectXYZOnlyPose: public  g2o::BaseUnaryEdge<2, Eigen::Vector3d, g2o::VertexSE3Expmap>{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    EdgeLineSE3ProjectXYZOnlyPose(){}
+
+    bool read(std::istream& is);
+
+    bool write(std::ostream& os) const;
+
+    void computeError()  {
+        const g2o::VertexSE3Expmap* v1 = static_cast<const g2o::VertexSE3Expmap*>(_vertices[0]);
+        Eigen::Vector3d obs(_measurement);
+        Eigen::Matrix<double,2,3> Matrix23d; 
+        Matrix23d(0,0) = cam_project(v1->estimate().map(Xw_s))(0); 
+        Matrix23d(0,1) = cam_project(v1->estimate().map(Xw_s))(1);
+        Matrix23d(0,2) = 1.0;
+        Matrix23d(1,0) = cam_project(v1->estimate().map(Xw_e))(0); 
+        Matrix23d(1,1) = cam_project(v1->estimate().map(Xw_e))(1);
+        Matrix23d(1,2) = 1.0;
+        _error = Matrix23d * obs;
+
+
+    }
+
+    bool isDepthPositive() {
+        const g2o::VertexSE3Expmap* v1 = static_cast<const g2o::VertexSE3Expmap*>(_vertices[0]);
+        return (v1->estimate().map(Xw_s))(2)>0.0 && (v1->estimate().map(Xw_e))(2)>0.0;
+    }
+
+
+    virtual void linearizeOplus();
+
+    Eigen::Vector2d cam_project(const Eigen::Vector3d & trans_xyz) const;
+
+    Eigen::Vector3d Xw_s;
+    Eigen::Vector3d Xw_e;
+    Eigen::Vector3d obs_temp;
+    double fx, fy, cx, cy, bf;
+};
+
+
+class  EdgeLineSE3ProjectXYZ: public  g2o::BaseBinaryEdge<2, Eigen::Vector3d, g2o::VertexSBALineXYZ, g2o::VertexSE3Expmap>{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    EdgeLineSE3ProjectXYZ();
+
+    bool read(std::istream& is);
+
+    bool write(std::ostream& os) const;
+
+    void computeError()  {
+        const g2o::VertexSE3Expmap* v1 = static_cast<const g2o::VertexSE3Expmap*>(_vertices[1]);
+        const g2o::VertexSBALineXYZ* v2 = static_cast<const g2o::VertexSBALineXYZ*>(_vertices[0]);
+        Eigen::Vector3d obs(_measurement);
+        Eigen::Matrix<double,2,3> Matrix23d; 
+        Matrix23d(0,0) = cam_project(v1->estimate().map(v2->estimate().head(3)))(0); 
+        Matrix23d(0,1) = cam_project(v1->estimate().map(v2->estimate().head(3)))(1);
+        Matrix23d(0,2) = 1.0;
+        Matrix23d(1,0) = cam_project(v1->estimate().map(v2->estimate().tail(3)))(0); 
+        Matrix23d(1,1) = cam_project(v1->estimate().map(v2->estimate().tail(3)))(1);
+        Matrix23d(1,2) = 1.0;
+        _error = Matrix23d * obs;
+
+
+    }
+
+    bool isDepthPositive() {
+        const g2o::VertexSE3Expmap* v1 = static_cast<const g2o::VertexSE3Expmap*>(_vertices[1]);
+        const g2o::VertexSBALineXYZ* v2 = static_cast<const g2o::VertexSBALineXYZ*>(_vertices[0]);
+        return (v1->estimate().map(v2->estimate().head(3)))(2)>0.0 && (v1->estimate().map(v2->estimate().tail(3)))(2)>0.0;
+    }
+
+
+    virtual void linearizeOplus();
+
+    Eigen::Vector2d cam_project(const Eigen::Vector3d & trans_xyz) const;
+
+    Eigen::Vector3d obs_temp;
+    double fx, fy, cx, cy, bf;
+};
 }
 
 #endif //ORB_SLAM3_OPTIMIZABLETYPES_H

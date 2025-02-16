@@ -17,16 +17,25 @@ void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft, 
                 vector<string> &vstrImageRight, vector<double> &vTimestamps);
 
 int main(int argc, char **argv) {
+
         if (argc != 5) {
                 cerr << endl
                      << "Usage: ./carla path_to_vocabulary path_to_settings path_to_sequence results_path" << endl;
-                return 1;
+                static const char* const default_args[] = {
+                        argv[0],
+                        "/home/artur/ROBOTICS/slam_project/slam/Vocabulary/ORBvoc.txt",
+                        "/home/artur/ROBOTICS/slam_project/slam/Examples/Stereo/CARLA.yaml",
+                        "/home/artur/ROBOTICS/slam_project/slam/dataset/4",
+                        "/home/artur/ROBOTICS/slam_project/slam/Vocabulary/results.txt"
+                };
+                argv = (char**)default_args;
+                argc = 5;
         }
 
-        std::cout << argv[1] << std::endl;
-        std::cout << argv[2] << std::endl;
-        std::cout << argv[3] << std::endl;
-        std::cout << argv[4] << std::endl;
+        // std::cout << argv[1] << std::endl;
+        // std::cout << argv[2] << std::endl;
+        // std::cout << argv[3] << std::endl;
+        // std::cout << argv[4] << std::endl;
 
         vector<string> vstrImageLeft;
         vector<string> vstrImageLeftSemantic;

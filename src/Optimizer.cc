@@ -1320,13 +1320,13 @@ namespace ORB_SLAM3
                     Eigen::Matrix<double, 3, 1> obs;
                     obs << pFrame->mvleLine[i](0), pFrame->mvleLine[i](1), pFrame->mvleLine[i](2);
 
-                    auto *e = new g2o::EdgeLineSE3ProjectXYZOnlyPose();
+                    auto *e = new ORB_SLAM3::EdgeLineSE3ProjectXYZOnlyPose();
 
                     e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(0)));
                     e->setMeasurement(obs);
                     const float invSigma2 = pFrame->mvInvLevelSigma2Line[pFrame->mvKeysUnLine[i].octave];
 
-                    Eigen::Matrix3d Info = Eigen::Matrix3d::Identity() * Weight * invSigma2;
+                    Eigen::Matrix2d Info = Eigen::Matrix2d::Identity() * Weight * invSigma2;
                     e->setInformation(Info);
 
                     auto *rk = new g2o::RobustKernelHuber;
@@ -1342,7 +1342,7 @@ namespace ORB_SLAM3
                     e->Xw_s = pML->GetWorldPos().cast<double>().head(3);
                     e->Xw_e = pML->GetWorldPos().cast<double>().tail(3);
 
-                    e->obs_temp = pFrame->mvleLine[i]; 
+                    e->obs_temp = pFrame->mvleLine[i].cast<double>(); 
 
                     optimizer.addEdge(e);
 
@@ -1474,9 +1474,9 @@ namespace ORB_SLAM3
 
             for (size_t i = 0, iend = vpEdgesLine.size(); i < iend; i++)
             {
-                g2o::EdgeLineSE3ProjectXYZOnlyPose *e = vpEdgesLine[i];
+                ORB_SLAM3::EdgeLineSE3ProjectXYZOnlyPose *e = vpEdgesLine[i];
 
-                const size_t idx = vnIndexEdgeStereo[i];
+                const size_t idx = vnIndexEdgeLine[i];
 
                 if (pFrame->mvbOutlierLine[idx])
                 {
@@ -2093,7 +2093,7 @@ namespace ORB_SLAM3
         vpMapPointEdgeStereo.reserve(nExpectedSize);
 
         // Set MapLine vertices
-        const int nExpectedSizeLines = (lLocalKeyFrames.size()+lFixedCameras.size())*lLocalMapLines.size();
+        const int nExpectedSizeLines = (lLocalKeyFrames.size() + lFixedCameras.size())* lLocalMapLines.size();
 
         vector<ORB_SLAM3::EdgeLineSE3ProjectXYZ*> vpEdgesLine;
         vpEdgesLine.reserve(nExpectedSizeLines);
@@ -2122,6 +2122,7 @@ namespace ORB_SLAM3
 
         int nKFs = lLocalKeyFrames.size()+lFixedCameras.size();
 
+        unsigned long max = 0;
         for (auto pMP : lLocalMapPoints)
         {
             auto *vPoint = new g2o::VertexSBAPointXYZ();
@@ -2130,6 +2131,8 @@ namespace ORB_SLAM3
             vPoint->setId(id);
             vPoint->setMarginalized(true);
             optimizer.addVertex(vPoint);
+            if (id > max)
+                max = id;
             nPoints++;
 
             const map<long unsigned int, Observation> observations = pMP->GetObservations();
@@ -2253,13 +2256,13 @@ namespace ORB_SLAM3
         {
             auto *vLine = new g2o::VertexSBALineXYZ();
             vLine->setEstimate(pML->GetWorldPos().cast<double>());
-            int id = pML->mnId + maxKFid + 1;
+            int id = pML->mnId + max + 1;
             vLine->setId(id);
             vLine->setMarginalized(true);
             optimizer.addVertex(vLine);
             nLines++;
 
-            const map<long unsigned int, Observation> observations = pMP->GetObservations();
+            const map<long unsigned int, ObservationLine> observations = pML->GetObservations();
 
             // Set edges
             for (const auto & observation : observations)
@@ -2268,25 +2271,29 @@ namespace ORB_SLAM3
 
                 if (!pKFi->isBad() && pKFi->GetMap() == pCurrentMap)
                 {
-                    const int leftIndex = get<0>(observation.second.projIndex);
+                    // Threshold so as to lower the weight of Lines according to the Number of the initial ORB Edges
+                    const int thr = 50;
+                    const int power = nInitialOrbEdges[pKFi->mnId] / thr;
+                    const float Weight = pow(2.0,-power);
+                    const float thHuberLine = sqrt(Weight*7.815);
 
-                    const cv::KeyPoint &kpUn = pKFi->mvKeysUn[leftIndex];
+                    const int index = observation.second.projIndex;
+
                     Eigen::Matrix<double, 3, 1> obs;
-                    const float kp_ur = pKFi->mvuRight[get<0>(observation.second.projIndex)];
-                    obs << kpUn.pt.x, kpUn.pt.y, kp_ur;
+                    obs << pKFi->mvleLine[index](0), pKFi->mvleLine[index](1), pKFi->mvleLine[index](2);
 
-                    auto *e = new g2o::EdgeStereoSE3ProjectXYZ();
+                    auto *e = new ORB_SLAM3::EdgeLineSE3ProjectXYZ();
 
                     e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id)));
                     e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKFi->mnId)));
                     e->setMeasurement(obs);
-                    const float &invSigma2 = pKFi->mvInvLevelSigma2[kpUn.octave];
-                    Eigen::Matrix3d Info = Eigen::Matrix3d::Identity() * invSigma2;
+                    const float &invSigma2 = pKFi->mvInvLevelSigma2Line[pKFi->mvKeysUnLine[index].octave];
+                    Eigen::Matrix2d Info = Eigen::Matrix2d::Identity() * Weight * invSigma2;
                     e->setInformation(Info);
 
                     auto *rk = new g2o::RobustKernelHuber;
                     e->setRobustKernel(rk);
-                    rk->setDelta(thHuberStereo);
+                    rk->setDelta(thHuberLine);
 
                     e->fx = pKFi->fx;
                     e->fy = pKFi->fy;
@@ -2294,12 +2301,15 @@ namespace ORB_SLAM3
                     e->cy = pKFi->cy;
                     e->bf = pKFi->mbf;
 
-                    optimizer.addEdge(e);
-                    vpEdgesStereo.push_back(e);
-                    vpEdgeKFStereo.push_back(pKFi);
-                    vpMapPointEdgeStereo.push_back(pMP);
+                    e->obs_temp = pKFi->mvleLine[index].cast<double>(); 
 
-                    nInitialOrbEdges[pKFi->mnId]++;
+                    optimizer.addEdge(e);
+                    vpEdgesLine.push_back(e);
+                    vpEdgeKFLine.push_back(pKFi);
+                    vpMapLineEdge.push_back(pML);
+                    Chi2Line.push_back(Weight * 7.815);
+                    invSigma2Line.push_back(invSigma2);
+
                     nEdges++;
                     }
             }
@@ -2315,8 +2325,10 @@ namespace ORB_SLAM3
         optimizer.initializeOptimization();
         optimizer.optimize(10);
 
-        vector<pair<KeyFrame *, MapPoint *>> vToErase;
-        vToErase.reserve(vpEdgesMono.size() + vpEdgesBody.size() + vpEdgesStereo.size());
+        vector<pair<KeyFrame *, MapPoint *>> vToErasePoint;
+        vector<pair<KeyFrame *, MapLine *>> vToEraseLine;
+        vToErasePoint.reserve(vpEdgesMono.size() + vpEdgesBody.size() + vpEdgesStereo.size());
+        vToEraseLine.reserve(vpEdgesLine.size());
 
         // Check inlier observations
         for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
@@ -2330,7 +2342,7 @@ namespace ORB_SLAM3
             if (e->chi2() > 5.991 || !e->isDepthPositive())
             {
                 KeyFrame *pKFi = vpEdgeKFMono[i];
-                vToErase.emplace_back(pKFi, pMP);
+                vToErasePoint.emplace_back(pKFi, pMP);
             }
         }
 
@@ -2345,7 +2357,7 @@ namespace ORB_SLAM3
             if (e->chi2() > 5.991 || !e->isDepthPositive())
             {
                 KeyFrame *pKFi = vpEdgeKFBody[i];
-                vToErase.emplace_back(pKFi, pMP);
+                vToErasePoint.emplace_back(pKFi, pMP);
             }
         }
 
@@ -2360,21 +2372,47 @@ namespace ORB_SLAM3
             if (e->chi2() > 7.815 || !e->isDepthPositive())
             {
                 KeyFrame *pKFi = vpEdgeKFStereo[i];
-                vToErase.emplace_back(pKFi, pMP);
+                vToErasePoint.emplace_back(pKFi, pMP);
+            }
+        }
+
+        for (size_t i = 0, iend = vpEdgesLine.size(); i < iend; i++)
+        {
+            auto *e = vpEdgesLine[i];
+            MapLine *pML = vpMapLineEdge[i];
+
+            if (pML->isBad())
+                continue;
+
+            if (e->chi2() > Chi2Line[i] || !e->isDepthPositive())
+            {
+                KeyFrame *pKFi = vpEdgeKFLine[i];
+                vToEraseLine.emplace_back(pKFi, pML);
             }
         }
 
         // Get Map Mutex
         unique_lock<mutex> lock(pMap->mMutexMapUpdate);
 
-        if (!vToErase.empty())
+        if (!vToErasePoint.empty())
         {
-            for (auto & i : vToErase)
+            for (auto & i : vToErasePoint)
             {
                 KeyFrame *pKFi = i.first;
                 MapPoint *pMPi = i.second;
                 pKFi->EraseMapPointMatch(pMPi);
                 pMPi->EraseObservation(pKFi);
+            }
+        }
+
+        if (!vToEraseLine.empty())
+        {
+            for (auto & i : vToEraseLine)
+            {
+                KeyFrame *pKFi = i.first;
+                MapLine *pMLi = i.second;
+                pKFi->EraseMapLineMatch(pMLi);
+                pMLi->EraseObservation(pKFi);
             }
         }
 
@@ -2394,6 +2432,14 @@ namespace ORB_SLAM3
             auto *vPoint = dynamic_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(pMP->mnId + maxKFid + 1));
             pMP->SetWorldPos(vPoint->estimate().cast<float>());
             pMP->UpdateNormalAndDepth();
+        }
+
+        // Lines
+        for (auto pML : lLocalMapLines)
+        {
+            auto *vLine = dynamic_cast<g2o::VertexSBALineXYZ *>(optimizer.vertex(pML->mnId + max + 1));
+            pML->SetWorldPos(vLine->estimate().head(3).cast<float>(), vLine->estimate().tail(3).cast<float>());
+            pML->UpdateNormalAndDepth();
         }
 
         pMap->IncreaseChangeIndex();

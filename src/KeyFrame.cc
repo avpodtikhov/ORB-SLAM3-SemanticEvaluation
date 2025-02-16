@@ -66,7 +66,7 @@ namespace ORB_SLAM3
                                                                        mK_(F.mK_), mpCamera(F.mpCamera),
                                                                        mpCamera2(F.mpCamera2), mvLeftToRightMatch(F.mvLeftToRightMatch), mvRightToLeftMatch(F.mvRightToLeftMatch), mvKeysRight(F.mvKeysRight), NLeft(F.Nleft), NRight(F.Nright),
                                                                        N_Lines(F.N_Lines), mvKeysLine(F.mvKeysLine), mvKeysUnLine(F.mvKeysUnLine), mvDepthLine(F.mvDepthLine), mnScaleLevelsLine(F.mnScaleLevelsLine), mvScaleFactorsLine(F.mvScaleFactorsLine), mvInvLevelSigma2Line(F.mvInvLevelSigma2Line),
-                                                                       mvpMapLines(F.mvpMapLines), mDescriptorsLine(F.mDescriptorsLine.clone()), mpLineVocabulary(F.mpLineVocabulary)
+                                                                       mvpMapLines(F.mvpMapLines), mDescriptorsLine(F.mDescriptorsLine.clone()), mpLineVocabulary(F.mpLineVocabulary), mvleLine(F.mvleLine)
     {
         mnId = nNextId++;
 

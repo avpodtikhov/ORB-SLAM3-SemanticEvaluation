@@ -1,5 +1,6 @@
-cmake_minimum_required(VERSION 2.8)
-project(ORB_SLAM3_SEMANTIC_EVALUATION)
+cmake_minimum_required(VERSION 3.5)
+cmake_policy(SET CMP0048 NEW)
+project(ORB_SLAM3_SEMANTIC_EVALUATION VERSION 1.0)
 
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE Release)
@@ -11,6 +12,10 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wno-deprecated-declarations)
+endif()
 
 # Check C++11 or C++0x support
 include(CheckCXXCompilerFlag)

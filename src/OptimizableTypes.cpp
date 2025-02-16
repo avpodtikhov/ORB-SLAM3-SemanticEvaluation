@@ -366,4 +366,157 @@ namespace ORB_SLAM3
         return os.good();
     }
 
+
+    bool EdgeLineSE3ProjectXYZOnlyPose::read(std::istream& is){
+        for (int i=0; i<3; i++){
+            is >> _measurement[i];
+        }
+        for (int i=0; i<2; i++)
+            for (int j=i; j<2; j++) {
+                is >> information()(i,j);
+                if (i!=j)
+                    information()(j,i)=information()(i,j);
+            }
+        return true;
+    }
+
+    bool EdgeLineSE3ProjectXYZOnlyPose::write(std::ostream& os) const {
+        for (int i=0; i<3; i++){
+            os << measurement()[i] << " ";
+        }
+
+        for (int i=0; i<2; i++)
+            for (int j=i; j<2; j++){
+                os << " " <<  information()(i,j);
+            }
+        return os.good();
+    }
+
+    Eigen::Vector2d EdgeLineSE3ProjectXYZOnlyPose::cam_project(const Eigen::Vector3d & trans_xyz) const{
+    const float invz = 1.0f/trans_xyz[2];
+    Eigen::Vector2d res;
+    res[0] = trans_xyz[0]*invz*fx + cx;
+    res[1] = trans_xyz[1]*invz*fy + cy;
+    return res;
+    }
+
+
+    void EdgeLineSE3ProjectXYZOnlyPose::linearizeOplus() {
+        g2o::VertexSE3Expmap * vi = static_cast<g2o::VertexSE3Expmap *>(_vertices[0]);
+        Eigen::Vector3d xyz_trans_s = vi->estimate().map(Xw_s);
+        Eigen::Vector3d xyz_trans_e = vi->estimate().map(Xw_e);
+
+        double x_s = xyz_trans_s[0];
+        double y_s = xyz_trans_s[1];
+        double invz_s = 1.0/xyz_trans_s[2];
+        double invz_s_2 = invz_s*invz_s;
+
+        double x_e = xyz_trans_e[0];
+        double y_e = xyz_trans_e[1];
+        double invz_e = 1.0/xyz_trans_e[2];
+        double invz_e_2 = invz_e*invz_e;
+
+        double l0 = obs_temp(0);
+        double l1 = obs_temp(1);
+
+        _jacobianOplusXi(0,0) = -fx*x_s*y_s*invz_s_2*l0-fy*(1+y_s*y_s*invz_s_2)*l1;
+        _jacobianOplusXi(0,1) = fx*(1+x_s*x_s*invz_s_2)*l0+fy*x_s*y_s*invz_s_2*l1;
+        _jacobianOplusXi(0,2) = -fx*y_s*invz_s*l0+fy*x_s*invz_s*l1; 
+        _jacobianOplusXi(0,3) = fx*invz_s*l0;
+        _jacobianOplusXi(0,4) = fy*invz_s*l1;
+        _jacobianOplusXi(0,5) = (-fx*x_s*l0-fy*y_s*l1)*invz_s_2;
+
+        _jacobianOplusXi(1,0) = -fx*x_e*y_e*invz_e_2*l0-fy*(1+y_e*y_e*invz_e_2)*l1;
+        _jacobianOplusXi(1,1) = fx*(1+x_e*x_e*invz_e_2)*l0+fy*x_e*y_e*invz_e_2*l1;
+        _jacobianOplusXi(1,2) = -fx*y_e*invz_e*l0+fy*x_e*invz_e*l1;  
+        _jacobianOplusXi(1,3) = fx*invz_e*l0;
+        _jacobianOplusXi(1,4) = fy*invz_e*l1;
+        _jacobianOplusXi(1,5) = (-fx*x_e*l0-fy*y_e*l1)*invz_e_2;
+    }
+
+
+    EdgeLineSE3ProjectXYZ::EdgeLineSE3ProjectXYZ() : 
+    g2o::BaseBinaryEdge<2, Eigen::Vector3d, g2o::VertexSBALineXYZ, g2o::VertexSE3Expmap>() 
+    {
+    } 
+
+    bool EdgeLineSE3ProjectXYZ::read(std::istream& is){
+        for (int i=0; i<3; i++){
+            is >> _measurement[i];
+        }
+        for (int i=0; i<2; i++)
+            for (int j=i; j<2; j++) {
+                is >> information()(i,j);
+                if (i!=j)
+                    information()(j,i)=information()(i,j);
+            }
+        return true;
+    }
+
+    bool EdgeLineSE3ProjectXYZ::write(std::ostream& os) const {
+        for (int i=0; i<3; i++){
+            os << measurement()[i] << " ";
+        }
+
+        for (int i=0; i<2; i++)
+            for (int j=i; j<2; j++){
+                os << " " <<  information()(i,j);
+            }
+        return os.good();
+    }
+
+    Eigen::Vector2d EdgeLineSE3ProjectXYZ::cam_project(const Eigen::Vector3d & trans_xyz) const{
+    const float invz = 1.0f/trans_xyz[2];
+    Eigen::Vector2d res;
+    res[0] = trans_xyz[0]*invz*fx + cx;
+    res[1] = trans_xyz[1]*invz*fy + cy;
+    return res;
+    }
+
+    void EdgeLineSE3ProjectXYZ::linearizeOplus() {
+        g2o::VertexSE3Expmap * vj= static_cast<g2o::VertexSE3Expmap *>(_vertices[1]);
+        g2o::SE3Quat T(vj->estimate());
+        g2o::VertexSBALineXYZ* vi = static_cast<g2o::VertexSBALineXYZ*>(_vertices[0]);
+        Eigen::Vector3d xyz_s = vi->estimate().head(3);
+        Eigen::Vector3d xyz_trans_s = T.map(xyz_s);
+        Eigen::Vector3d xyz_e = vi->estimate().tail(3);
+        Eigen::Vector3d xyz_trans_e = T.map(xyz_e); 
+
+        const Eigen::Matrix3d R =  T.rotation().toRotationMatrix();
+
+        double x_s = xyz_trans_s[0];
+        double y_s = xyz_trans_s[1];
+        double invz_s = 1.0/xyz_trans_s[2];
+        double invz_s_2 = invz_s*invz_s;
+
+        double x_e = xyz_trans_e[0];
+        double y_e = xyz_trans_e[1];
+        double invz_e = 1.0/xyz_trans_e[2];
+        double invz_e_2 = invz_e*invz_e;
+
+        double l0 = obs_temp(0);
+        double l1 = obs_temp(1);
+
+        _jacobianOplusXi(0,0) = fx*l0*invz_s*R(0,0)+fy*l1*invz_s*R(1,0)-(fx*x_s*l0*invz_s_2+fy*y_s*l1*invz_s_2)*R(2,0);
+        _jacobianOplusXi(0,1) = fx*l0*invz_s*R(0,1)+fy*l1*invz_s*R(1,1)-(fx*x_s*l0*invz_s_2+fy*y_s*l1*invz_s_2)*R(2,1);
+        _jacobianOplusXi(0,2) = fx*l0*invz_s*R(0,2)+fy*l1*invz_s*R(1,2)-(fx*x_s*l0*invz_s_2+fy*y_s*l1*invz_s_2)*R(2,2);
+
+        _jacobianOplusXi(1,0) = fx*l0*invz_e*R(0,0)+fy*l1*invz_e*R(1,0)-(fx*x_e*l0*invz_e_2+fy*y_e*l1*invz_e_2)*R(2,0);
+        _jacobianOplusXi(1,1) = fx*l0*invz_e*R(0,1)+fy*l1*invz_e*R(1,1)-(fx*x_e*l0*invz_e_2+fy*y_e*l1*invz_e_2)*R(2,1);
+        _jacobianOplusXi(1,2) = fx*l0*invz_e*R(0,2)+fy*l1*invz_e*R(1,2)-(fx*x_e*l0*invz_e_2+fy*y_e*l1*invz_e_2)*R(2,2);
+
+        _jacobianOplusXj(0,0) = -fx*x_s*y_s*invz_s_2*l0-fy*(1+y_s*y_s*invz_s_2)*l1;
+        _jacobianOplusXj(0,1) = fx*(1+x_s*x_s*invz_s_2)*l0+fy*x_s*y_s*invz_s_2*l1;
+        _jacobianOplusXj(0,2) = -fx*y_s*invz_s*l0+fy*x_s*invz_s*l1; 
+        _jacobianOplusXj(0,3) = fx*invz_s*l0;
+        _jacobianOplusXj(0,4) = fy*invz_s*l1;
+        _jacobianOplusXj(0,5) = (-fx*x_s*l0-fy*y_s*l1)*invz_s_2;
+
+        _jacobianOplusXj(1,0) = -fx*x_e*y_e*invz_e_2*l0-fy*(1+y_e*y_e*invz_e_2)*l1;
+        _jacobianOplusXj(1,1) = fx*(1+x_e*x_e*invz_e_2)*l0+fy*x_e*y_e*invz_e_2*l1;
+        _jacobianOplusXj(1,2) = -fx*y_e*invz_e*l0+fy*x_e*invz_e*l1;  
+        _jacobianOplusXj(1,3) = fx*invz_e*l0;
+        _jacobianOplusXj(1,4) = fy*invz_e*l1;
+        _jacobianOplusXj(1,5) = (-fx*x_e*l0-fy*y_e*l1)*invz_e_2; 
+    }
 }

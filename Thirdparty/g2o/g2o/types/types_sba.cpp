@@ -53,4 +53,27 @@ namespace g2o {
     return os.good();
   }
 
+  // Added by John A. 
+  // Vertex for line endpoints
+  VertexSBALineXYZ::VertexSBALineXYZ() : BaseVertex<3, Matrix<double,6,1> >()
+  {
+  }
+
+  bool VertexSBALineXYZ::read(std::istream& is)
+  {
+    Matrix<double,6,1> lv;
+    for (int i=0; i<6; i++)
+      is >> _estimate[i];
+    return true;
+  }
+
+  bool VertexSBALineXYZ::write(std::ostream& os) const
+  {
+    Matrix<double,6,1> lv=estimate();
+    for (int i=0; i<6; i++){
+      os << lv[i] << " ";
+    }
+    return os.good();
+  }
+
 } // end namespace

@@ -171,36 +171,44 @@ namespace ORB_SLAM3
     // Copy Constructor
     Frame::Frame(const Frame &frame)
     {
-        copyPoseData(frame);
-        copyCameraParameters(frame);
-        copyFeatureExtractors(frame);
-        copyPointFeatures(frame);
-        copyLineFeatures(frame);
-        copyScaleParameters(frame);
-        copySemanticData(frame);
-        copyIMUData(frame);
-        copyBoWData(frame);
+        try {
+            copyPoseData(frame);
+            copyCameraParameters(frame);
+            copyFeatureExtractors(frame);
+            copyPointFeatures(frame);
+            copyLineFeatures(frame);
+            copyScaleParameters(frame);
+            copySemanticData(frame);
+            copyIMUData(frame);
+            copyBoWData(frame);
 
-        for (int i = 0; i < FRAME_GRID_COLS; i++)
-            for (int j = 0; j < FRAME_GRID_ROWS; j++)
-            {
-                mGrid[i][j] = frame.mGrid[i][j];
-                if (frame.Nleft > 0)
+
+            for (int i = 0; i < FRAME_GRID_COLS; i++)
+                for (int j = 0; j < FRAME_GRID_ROWS; j++)
                 {
-                    mGridRight[i][j] = frame.mGridRight[i][j];
+                    mGrid[i][j] = frame.mGrid[i][j];
+                    if (frame.Nleft > 0)
+                    {
+                        mGridRight[i][j] = frame.mGridRight[i][j];
+                    }
                 }
+
+            if (frame.mbHasPose)
+                SetPose(frame.GetPose());
+
+            if (frame.HasVelocity())
+            {
+                SetVelocity(frame.GetVelocity());
             }
 
-        if (frame.mbHasPose)
-            SetPose(frame.GetPose());
+            mmProjectPoints = frame.mmProjectPoints;
+            mmMatchedInImage = frame.mmMatchedInImage;
 
-        if (frame.HasVelocity())
-        {
-            SetVelocity(frame.GetVelocity());
+            std::cout << "Frame " << frame.mnId << " copied successfully" << std::endl;
+        } catch (const std::exception& e) {
+            std::cout << "Error copying frame " << frame.mnId << ": " << e.what() << std::endl;
+            throw;
         }
-
-        mmProjectPoints = frame.mmProjectPoints;
-        mmMatchedInImage = frame.mmMatchedInImage;
 
 #ifdef REGISTER_TIMES
         mTimeStereoMatch = frame.mTimeStereoMatch;
@@ -440,13 +448,6 @@ namespace ORB_SLAM3
         mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
         mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
         mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
-
-        mnScaleLevelsLine = mpLineExtractorLeft->GetLevels();
-        mvScaleFactorsLine = mpLineExtractorLeft->GetScaleFactors();
-        mvInvScaleFactorsLine = mpLineExtractorLeft->GetInverseScaleFactors();
-        mvLevelSigma2Line =  mpLineExtractorLeft->GetScaleSigmaSquares();
-        mvInvLevelSigma2Line = mpLineExtractorLeft->GetInverseScaleSigmaSquares();
-
         // ORB extraction
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_StartExtORB = std::chrono::steady_clock::now();
@@ -565,6 +566,13 @@ namespace ORB_SLAM3
         monoRight = -1;
 
         AssignFeaturesToGrid();
+    
+        mnScaleLevelsLine = mpLineExtractorLeft->GetLevels();
+        mvScaleFactorsLine = mpLineExtractorLeft->GetScaleFactors();
+        mvInvScaleFactorsLine = mpLineExtractorLeft->GetInverseScaleFactors();
+        mvLevelSigma2Line =  mpLineExtractorLeft->GetScaleSigmaSquares();
+        mvInvLevelSigma2Line = mpLineExtractorLeft->GetInverseScaleSigmaSquares();
+
     }
 
     Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor *extractor, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF, const IMU::Calib &ImuCalib)
@@ -1594,7 +1602,7 @@ namespace ORB_SLAM3
         // mvDisparity_Lines.clear();
         mvleLine.clear();
         // mvDisparity_Lines.resize(mvKeys_Line.size(),pair<float,float>(-1,-1));
-        mvleLine.resize(mvKeysLine.size(),Eigen::Vector3d(0,0,0));
+        mvleLine.resize(mvKeysLine.size(),Eigen::Vector3f(0,0,0));
 
         // Line segments stereo matching
         // --------------------------------------------------------------------------------------------------------------------
@@ -1668,9 +1676,9 @@ namespace ORB_SLAM3
             }
         }
         for (int i=0; i < N_Lines; i++) {
-            Eigen::Vector3d sp_lun; sp_lun << mvKeysUnLine[i].startPointX, mvKeysUnLine[i].startPointY, 1.0;
-            Eigen::Vector3d ep_lun; ep_lun << mvKeysUnLine[i].endPointX,   mvKeysUnLine[i].endPointY,   1.0;
-            Eigen::Vector3d le_l; le_l << sp_lun.cross(ep_lun); le_l = le_l / std::sqrt( le_l(0)*le_l(0) + le_l(1)*le_l(1) );
+            Eigen::Vector3f sp_lun; sp_lun << mvKeysUnLine[i].startPointX, mvKeysUnLine[i].startPointY, 1.0;
+            Eigen::Vector3f ep_lun; ep_lun << mvKeysUnLine[i].endPointX,   mvKeysUnLine[i].endPointY,   1.0;
+            Eigen::Vector3f le_l; le_l << sp_lun.cross(ep_lun); le_l = le_l / std::sqrt( le_l(0)*le_l(0) + le_l(1)*le_l(1) );
             mvleLine[i] = le_l;
         }
     }

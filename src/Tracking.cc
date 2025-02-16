@@ -646,10 +646,10 @@ namespace ORB_SLAM3
         if (mSensor == System::MONOCULAR || mSensor == System::IMU_MONOCULAR)
             mpIniORBextractor = new ORBextractor(5 * nFeatures, fScaleFactor, nLevels, fIniThFAST, fMinThFAST, mDropMoving, mDropDynamic, mUseSemantic, mUseInstance);
 
-        if (mUseLines)
+        if (mUseLines) {
             mpLineExtractor = new LineExtractor(mLinesNFeatures, mLinesLsdRefine, mLinesLsdScale, mLinesLevels, mLinesScale, mLinesExtractor);
             mpLineExtractorRight = new LineExtractor(mLinesNFeatures, mLinesLsdRefine, mLinesLsdScale, mLinesLevels, mLinesScale, mLinesExtractor);
-
+        }
         // IMU parameters
         Sophus::SE3f Tbc = settings->Tbc();
         mInsertKFsLost = settings->insertKFsWhenLost();
@@ -659,7 +659,7 @@ namespace ORB_SLAM3
         float Na = settings->noiseAcc();
         float Ngw = settings->gyroWalk();
         float Naw = settings->accWalk();
-
+        
         const float sf = sqrt(mImuFreq);
         mpImuCalib = new IMU::Calib(Tbc, Ng * sf, Na * sf, Ngw / sf, Naw / sf);
 
@@ -1614,9 +1614,9 @@ namespace ORB_SLAM3
         vdStereoMatch_ms.push_back(mCurrentFrame.mTimeStereoMatch);
 #endif
 
-        // std::cout << "Tracking start" << endl;
+        std::cout << "Tracking start" << endl;
         Track();
-        // std::cout << "Tracking end" << endl;
+        std::cout << "Tracking end" << endl;
 
         return mCurrentFrame.GetPose();
     }
@@ -1893,6 +1893,7 @@ namespace ORB_SLAM3
 
     void Tracking::Track()
     {
+        std::cout << mCurrentFrame.mnId << std::endl;
         if (mUseLines)
             TrackWithLines();
         else
@@ -3740,7 +3741,7 @@ namespace ORB_SLAM3
                     MapLine *pML = mCurrentFrame.mvpMapLines[i];
                     
                     mCurrentFrame.mvpMapLines[i] = static_cast<MapLine *>(NULL);
-                    mCurrentFrame.mvbOutlierLines[i] = false;
+                    mCurrentFrame.mvbOutlierLine[i] = false;
                     pML->mbTrackInView = false;
                     pML->mnLastFrameSeen = mCurrentFrame.mnId;
 
@@ -5235,6 +5236,7 @@ namespace ORB_SLAM3
     void Tracking::SearchLocalPointsAndLines()
     {
         // Do not search map points already matched
+        std::cout << "SearchLocalPointsAndLines" << std::endl;
         for (vector<MapPoint *>::iterator vit = mCurrentFrame.mvpMapPoints.begin(), vend = mCurrentFrame.mvpMapPoints.end(); vit != vend; vit++)
         {
             MapPoint *pMP = *vit;
@@ -5343,7 +5345,7 @@ namespace ORB_SLAM3
                 nToMatch++;
             }
         }
-
+        std::cout << "SearchLocalPointsAndLines Points done" << std::endl;
         if(nToMatch > 0)
         {
             LineMatcher matcher(0.9, 3.0, M_PI/10.0);
@@ -5352,6 +5354,7 @@ namespace ORB_SLAM3
                 th = 3;
             int matchesLines = matcher.SearchByProjection(mCurrentFrame, mvpLocalMapLinesInFrustum, true);
         }
+        std::cout << "SearchLocalPointsAndLines Lines done" << std::endl;
     }
 
     void Tracking::UpdateLocalMap()

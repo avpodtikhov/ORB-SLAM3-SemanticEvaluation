@@ -56,6 +56,27 @@ namespace g2o {
     }
 };
 
+// Added by John A. 
+// Vertex for line endpoints
+ class VertexSBALineXYZ : public BaseVertex<3, Matrix<double,6,1> >
+{
+  public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW    
+    VertexSBALineXYZ();
+    virtual bool read(std::istream& is);
+    virtual bool write(std::ostream& os) const;
+
+    virtual void setToOriginImpl() {
+      _estimate.fill(0.);
+    }
+
+    virtual void oplusImpl(const double* update)
+    {
+      Eigen::Map<const Matrix<double,6,1> > v(update);
+      _estimate += v;
+    }
+};
+
 } // end namespace
 
 #endif // SBA_TYPES
