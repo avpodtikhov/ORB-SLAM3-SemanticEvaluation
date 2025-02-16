@@ -54,9 +54,9 @@ class Frame;
 class MapLine
 {
 public:
-    MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP, Map* pMap);
-    MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP, KeyFrame* pRefKF, Map* pMap);
-    MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP,  Map* pMap, Frame* pFrame, const int &idxF);
+    MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP, Map* pMap, const int semantic_cls = 0, const int instance_cls = 0);
+    MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP, KeyFrame* pRefKF, Map* pMap, const int semantic_cls = 0, const int instance_cls = 0);
+    MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP,  Map* pMap, Frame* pFrame, const int &idxF, const int semantic_cls = 0, const int instance_cls = 0);
 
     void SetWorldPos(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP);
     Eigen::Matrix<float, 6, 1> GetWorldPos();
@@ -104,6 +104,11 @@ public:
 
     Map* GetMap();
 
+    void AddSemObservation(int semantic_cls);
+    void AddInstanceObservation(int instance_cls);
+
+    int mvSemanticCls;
+    int mvInstanceCls;
 public:
     long unsigned int mnId;
     static long unsigned int nNextId;
@@ -144,6 +149,8 @@ public:
     Eigen::Vector3f mNormalVectorMerge;
     
 protected:    
+    std::vector<int> mvSemanticDistr;
+    std::map<int, int> mvInstanceDistr;
 
      // Keyframes observing the line and associated index in keyframe
      std::map<unsigned long int, ObservationLine> mObservations;

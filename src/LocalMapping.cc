@@ -261,7 +261,7 @@ namespace ORB_SLAM3
             SetFinish();
             return;
 
-        usleep(3000);
+        // usleep(3000);
 
         SetFinish();
         mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
@@ -485,7 +485,7 @@ namespace ORB_SLAM3
             SetFinish();
             return;
 
-        usleep(3000);
+        // usleep(3000);
 
         SetFinish();
         mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);

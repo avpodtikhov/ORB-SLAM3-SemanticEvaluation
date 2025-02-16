@@ -102,7 +102,7 @@ namespace ORB_SLAM3
                 vCurrentKeysMoving = mvCurrentKeysMoving;
                 vCurrentKeysSemantic = mvCurrentKeysSemantic;
                 vCurrentMapSemantic = mvCurrentMapSemantic;
-
+                
                 vIniKeys = mvIniKeys;
                 vMatches = mvIniMatches;
                 vTracks = mvTracks;
@@ -222,14 +222,10 @@ namespace ORB_SLAM3
                         if (vCurrentMapSemantic[i] != vCurrentKeysSemantic[i])
                             cv::rectangle(im, pt1, pt2, color_palette[vCurrentMapSemantic[i]]);
                         cv::circle(im, point, 2, color_palette[vCurrentKeysSemantic[i]], -1);
-                        // cv::rectangle(im, pt1, pt2, standardColor);
-                        // cv::circle(im, point, 2, standardColor, -1);
                         mnTracked++;
                     }
                     else // This is match to a "visual odometry" MapPoint created in the last frame
                     {
-                        // cv::rectangle(im, pt1, pt2, odometryColor);
-                        // cv::circle(im, point, 2, odometryColor, -1);
                         mnTrackedVO++;
                     }
                 }
@@ -245,47 +241,103 @@ namespace ORB_SLAM3
     cv::Mat FrameDrawer::DrawFrameWithLines(bool bOldFeatures)
     {
         cv::Mat im;
-        vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
-        vector<int> vMatches; // Initialization: correspondeces with reference keypoints
+        vector<cv::KeyPoint> vIniKeys;     // Initialization: KeyPoints in reference frame
+        vector<int> vMatches;              // Initialization: correspondeces with reference keypoints
         vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
         vector<cv::line_descriptor::KeyLine> vCurrentKeysLine; // KeyLines in current frame
         vector<bool> vbVO, vbMap, vbMapLine, vbVOLine; // Tracked MapPoints and MapLines in current frame
-        vector<pair<cv::Point2f, cv::Point2f> > vTracks;
+        vector<pair<cv::Point2f, cv::Point2f>> vTracks;
         int state; // Tracking state
+        vector<float> vCurrentDepth;
+        float thDepth;
 
-        //
         Frame currentFrame;
-        vector<MapPoint*> vpLocalMap;
+        vector<MapPoint *> vpLocalMap;
         vector<cv::KeyPoint> vMatchesKeys;
-        vector<MapPoint*> vpMatchedMPs;
+        vector<MapPoint *> vpMatchedMPs;
         vector<cv::KeyPoint> vOutlierKeys;
-        vector<MapPoint*> vpOutlierMPs;
+        vector<MapPoint *> vpOutlierMPs;
+        vector<bool> vCurrentKeysMoving;
+        vector<int> vCurrentKeysSemantic;
+        vector<int> vCurrentMapSemantic;
+
+        vector<bool> vCurrentLinesMoving;
+        vector<int> vCurrentLinesSemantic;
+        vector<int> vCurrentMapLinesSemantic;
+
         map<long unsigned int, cv::Point2f> mProjectPoints;
         map<long unsigned int, cv::Point2f> mMatchedInImage;
 
-        //Copy variables within scoped mutex
+        cv::Scalar standardColor(0, 255, 0);
+        cv::Scalar odometryColor(255, 0, 0);
+
+        cv::Scalar color0(0, 0, 0);
+        cv::Scalar color1(70, 70, 70);
+        cv::Scalar color2(100, 40, 40);
+        cv::Scalar color3(55, 90, 80);
+        cv::Scalar color4(220, 20, 60);
+        cv::Scalar color5(153, 153, 153);
+        cv::Scalar color6(157, 234, 50);
+        cv::Scalar color7(128, 64, 128);
+        cv::Scalar color8(244, 35, 232);
+        cv::Scalar color9(107, 142, 35);
+        cv::Scalar color10(0, 0, 142);
+        cv::Scalar color11(102, 102, 156);
+        cv::Scalar color12(220, 220, 0);
+        cv::Scalar color13(70, 130, 180);
+        cv::Scalar color14(81, 0, 81);
+        cv::Scalar color15(150, 100, 100);
+        cv::Scalar color16(230, 150, 140);
+        cv::Scalar color17(180, 165, 180);
+        cv::Scalar color18(250, 170, 30);
+        cv::Scalar color19(110, 190, 160);
+        cv::Scalar color20(170, 120, 50);
+        cv::Scalar color21(45, 60, 150);
+        cv::Scalar color22(145, 170, 100);
+        std::vector<cv::Scalar> color_palette = {color0, color1, color2, color3, color4, color5, color6, color7, color8, color9, color10, color11, color12, color13, color14, color15, color16, color17, color18, color19, color20, color21, color22};
+
+        // Copy variables within scoped mutex
         {
             unique_lock<mutex> lock(mMutex);
-            state=mState;
-            if(mState==Tracking::SYSTEM_NOT_READY)
-                mState=Tracking::NO_IMAGES_YET;
+            state = mState;
+            if (mState == Tracking::SYSTEM_NOT_READY)
+                mState = Tracking::NO_IMAGES_YET;
 
             mIm.copyTo(im);
 
-            if(mState==Tracking::NOT_INITIALIZED)
+            if (mState == Tracking::NOT_INITIALIZED)
             {
                 vCurrentKeys = mvCurrentKeys;
                 vCurrentKeysLine = mvCurrentLines;
+
+                vCurrentKeysMoving = mvCurrentKeysMoving;
+                vCurrentKeysSemantic = mvCurrentKeysSemantic;
+                vCurrentMapSemantic = mvCurrentMapSemantic;
+
+                vCurrentLinesMoving = mvCurrentLinesMoving;
+                vCurrentLinesSemantic = mvCurrentLinesSemantic;
+                vCurrentMapLinesSemantic = mvCurrentMapLinesSemantic;
+
                 vIniKeys = mvIniKeys;
                 vMatches = mvIniMatches;
                 vTracks = mvTracks;
             }
-            else if(mState==Tracking::OK /*&& bOldFeatures*/)
+            else if (mState == Tracking::OK)
             {
                 vCurrentKeys = mvCurrentKeys;
+                vCurrentKeysLine = mvCurrentLines;
+
+                vCurrentKeysMoving = mvCurrentKeysMoving;
+                vCurrentKeysSemantic = mvCurrentKeysSemantic;
+                vCurrentMapSemantic = mvCurrentMapSemantic;
+
+                vCurrentLinesMoving = mvCurrentLinesMoving;
+                vCurrentLinesSemantic = mvCurrentLinesSemantic;
+                vCurrentMapLinesSemantic = mvCurrentMapLinesSemantic;
+
                 vbVO = mvbVO;
                 vbMap = mvbMap;
-                vCurrentKeysLine = mvCurrentLines;
+
                 vbVOLine = mvbVOLine;
                 vbMapLine = mvbMapLine;
 
@@ -298,68 +350,87 @@ namespace ORB_SLAM3
                 mProjectPoints = mmProjectPoints;
                 mMatchedInImage = mmMatchedInImage;
 
+                vCurrentDepth = mvCurrentDepth;
+                thDepth = mThDepth;
             }
-            else if(mState==Tracking::LOST)
+            else if (mState == Tracking::LOST)
             {
                 vCurrentKeys = mvCurrentKeys;
                 vCurrentKeysLine = mvCurrentLines;
+
+                vCurrentKeysMoving = mvCurrentKeysMoving;
+                vCurrentKeysSemantic = mvCurrentKeysSemantic;
+                vCurrentMapSemantic = mvCurrentMapSemantic;
+
+                vCurrentLinesMoving = mvCurrentLinesMoving;
+                vCurrentLinesSemantic = mvCurrentLinesSemantic;
+                vCurrentMapLinesSemantic = mvCurrentMapLinesSemantic;
             }
         }
 
-        if(im.channels()<3) //this should be always true
-            cvtColor(im,im,cv::COLOR_GRAY2BGR);
+        if (im.channels() < 3) // this should be always true
+            cvtColor(im, im, cv::COLOR_GRAY2BGR);
 
-        //Draw
-        if(state==Tracking::NOT_INITIALIZED)
+        // Draw
+        if (state == Tracking::NOT_INITIALIZED)
         {
-            for(unsigned int i=0; i<vMatches.size(); i++)
+            for (unsigned int i = 0; i < vMatches.size(); i++)
             {
-                if(vMatches[i]>=0)
+                if (vMatches[i] >= 0)
                 {
-                    cv::line(im,vIniKeys[i].pt,vCurrentKeys[vMatches[i]].pt,
-                            cv::Scalar(0,255,0));
+                    cv::Point2f pt1, pt2;
+                    pt1 = vIniKeys[i].pt;
+                    pt2 = vCurrentKeys[vMatches[i]].pt;
+                    cv::line(im, pt1, pt2, standardColor);
                 }
             }
-            for(vector<pair<cv::Point2f, cv::Point2f> >::iterator it=vTracks.begin(); it!=vTracks.end(); it++)
-                cv::line(im,(*it).first,(*it).second, cv::Scalar(0,255,0),5);
-
+            for (auto &vTrack : vTracks)
+            {
+                cv::Point2f pt1, pt2;
+                pt1 = vTrack.first;
+                pt2 = vTrack.second;
+                cv::line(im, pt1, pt2, standardColor, 5);
+            }
         }
-        else if(state==Tracking::OK && bOldFeatures) //TRACKING
+        else if (state == Tracking::OK) // TRACKING
         {
-            mnTracked=0;
-            mnTrackedVO=0;
-            mnTrackedLine=0;
-            mnTrackedVOLine=0;
+            mnTracked = 0;
+            mnTrackedVO = 0;
+            mnTrackedLine = 0;
+            mnTrackedVOLine = 0;
+
             const float r = 5;
             int n = vCurrentKeys.size();
-            for(int i=0;i<n;i++)
+
+            for (int i = 0; i < n; i++)
             {
-                if(vbVO[i] || vbMap[i])
+                if (vbVO[i] || vbMap[i])
                 {
-                    cv::Point2f pt1,pt2;
-                    pt1.x=vCurrentKeys[i].pt.x-r;
-                    pt1.y=vCurrentKeys[i].pt.y-r;
-                    pt2.x=vCurrentKeys[i].pt.x+r;
-                    pt2.y=vCurrentKeys[i].pt.y+r;
+                    cv::Point2f pt1, pt2;
+                    cv::Point2f point;
+                    point = vCurrentKeys[i].pt;
+                    pt1.x = vCurrentKeys[i].pt.x - r;
+                    pt1.y = vCurrentKeys[i].pt.y - r;
+                    pt2.x = vCurrentKeys[i].pt.x + r;
+                    pt2.y = vCurrentKeys[i].pt.y + r;
 
                     // This is a match to a MapPoint in the map
-                    if(vbMap[i])
+                    if (vbMap[i])
                     {
-                        cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
-                        cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
+                        if (vCurrentMapSemantic[i] != vCurrentKeysSemantic[i])
+                            cv::rectangle(im, pt1, pt2, color_palette[vCurrentMapSemantic[i]]);
+                        cv::circle(im, point, 2, color_palette[vCurrentKeysSemantic[i]], -1);
                         mnTracked++;
                     }
                     else // This is match to a "visual odometry" MapPoint created in the last frame
                     {
-                        cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
-                        cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
                         mnTrackedVO++;
                     }
                 }
             }
             // draw line features
             int nl = vCurrentKeysLine.size();
-            for(int i=0; i<nl; ++i)
+            for(int i = 0; i < nl; i++)
             {
                 cv::Point2f sp, ep;
                 sp.x = int(vCurrentKeysLine[i].startPointX);
@@ -367,92 +438,234 @@ namespace ORB_SLAM3
                 ep.x = int(vCurrentKeysLine[i].endPointX);
                 ep.y = int(vCurrentKeysLine[i].endPointY);
                 if (vbMapLine[i]) {
-                    cv::line(im, sp, ep, cv::Scalar(0,0,255), 1.5);                     // Red
+                    cv::line(im, sp, ep, color_palette[vCurrentMapLinesSemantic[i]], 1.5);                     // Red
                     ++mnTrackedLine;
                 }
                 else {
-                    cv::line(im, sp, ep, cv::Scalar(255,0,255), 1.5);                   // Magenta
+                    // cv::line(im, sp, ep, cv::Scalar(255,0,255), 1.5);                   // Magenta
                     ++mnTrackedVOLine;
                 }
             }
         }
-        else if(state==Tracking::OK && !bOldFeatures)
-        {
-            mnTracked=0;
-            mnTrackedLine=0;
-            int nTracked2 = 0;
-            mnTrackedVO=0;
-            mnTrackedVOLine=0;
-            int n = vCurrentKeys.size();
 
-            for(int i=0; i < n; ++i)
-            {
-
-                // This is a match to a MapPoint in the map
-                if(vbMap[i])
-                {
-                    mnTracked++;
-                }
-            }
-
-            n = mProjectPoints.size();
-            map<long unsigned int, cv::Point2f>::iterator it_match = mMatchedInImage.begin();
-            while(it_match != mMatchedInImage.end())
-            {
-                long unsigned int mp_id = it_match->first;
-                cv::Point2f p_image = it_match->second;
-
-                if(mProjectPoints.find(mp_id) != mProjectPoints.end())
-                {
-                    cv::Point2f p_proj = mMatchedInImage[mp_id];
-                    cv::line(im, p_proj, p_image, cv::Scalar(0, 255, 0), 2);
-                    nTracked2++;
-                }
-                else
-                {
-                    cv::circle(im,p_image,2,cv::Scalar(0,0,255),-1);
-                }
-
-                it_match++;
-            }
-            n = vOutlierKeys.size();
-            for(int i = 0; i < n; ++i)
-            {
-                cv::Point2f point3d_proy;
-                float u, v;
-                currentFrame.ProjectPointDistort(vpOutlierMPs[i] , point3d_proy, u, v);
-
-                cv::Point2f point_im = vOutlierKeys[i].pt;
-
-                cv::line(im,cv::Point2f(u, v), point_im,cv::Scalar(0, 0, 255), 1);
-            }
-            // draw line features
-            int nl = vCurrentKeysLine.size();
-            for(int i=0; i<nl; ++i)
-            {
-                if(vbVOLine[i] || vbMapLine[i])
-                {
-                    cv::Point2f sp, ep;
-                    sp.x = int(vCurrentKeysLine[i].startPointX);
-                    sp.y = int(vCurrentKeysLine[i].startPointY);
-                    ep.x = int(vCurrentKeysLine[i].endPointX);
-                    ep.y = int(vCurrentKeysLine[i].endPointY);
-                    if(vbMapLine[i]) {
-                        cv::line(im, sp, ep, cv::Scalar(0,0,255), 1.5);                     // Red
-                        ++mnTrackedLine;
-                    }
-                    else {
-                        cv::line(im, sp, ep, cv::Scalar(255,0,255), 1.5);                   // Magenta
-                        ++mnTrackedVOLine;
-                    }
-                }
-            }
-        }
         cv::Mat imWithInfo;
-        DrawTextInfoWithLines(im,state, imWithInfo);
+        DrawTextInfo(im, state, imWithInfo);
 
         return imWithInfo;
     }
+
+    // cv::Mat FrameDrawer::DrawFrameWithLines(bool bOldFeatures)
+    // {
+    //     cv::Mat im;
+    //     vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
+    //     vector<int> vMatches; // Initialization: correspondeces with reference keypoints
+    //     vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
+    //     vector<cv::line_descriptor::KeyLine> vCurrentKeysLine; // KeyLines in current frame
+    //     vector<bool> vbVO, vbMap, vbMapLine, vbVOLine; // Tracked MapPoints and MapLines in current frame
+    //     vector<pair<cv::Point2f, cv::Point2f> > vTracks;
+    //     int state; // Tracking state
+
+    //     //
+    //     Frame currentFrame;
+    //     vector<MapPoint*> vpLocalMap;
+    //     vector<cv::KeyPoint> vMatchesKeys;
+    //     vector<MapPoint*> vpMatchedMPs;
+    //     vector<cv::KeyPoint> vOutlierKeys;
+    //     vector<MapPoint*> vpOutlierMPs;
+    //     map<long unsigned int, cv::Point2f> mProjectPoints;
+    //     map<long unsigned int, cv::Point2f> mMatchedInImage;
+
+    //     //Copy variables within scoped mutex
+    //     {
+    //         unique_lock<mutex> lock(mMutex);
+    //         state=mState;
+    //         if(mState==Tracking::SYSTEM_NOT_READY)
+    //             mState=Tracking::NO_IMAGES_YET;
+
+    //         mIm.copyTo(im);
+
+    //         if(mState==Tracking::NOT_INITIALIZED)
+    //         {
+    //             vCurrentKeys = mvCurrentKeys;
+    //             vCurrentKeysLine = mvCurrentLines;
+    //             vIniKeys = mvIniKeys;
+    //             vMatches = mvIniMatches;
+    //             vTracks = mvTracks;
+    //         }
+    //         else if(mState==Tracking::OK /*&& bOldFeatures*/)
+    //         {
+    //             vCurrentKeys = mvCurrentKeys;
+    //             vbVO = mvbVO;
+    //             vbMap = mvbMap;
+    //             vCurrentKeysLine = mvCurrentLines;
+    //             vbVOLine = mvbVOLine;
+    //             vbMapLine = mvbMapLine;
+
+    //             currentFrame = mCurrentFrame;
+    //             vpLocalMap = mvpLocalMap;
+    //             vMatchesKeys = mvMatchedKeys;
+    //             vpMatchedMPs = mvpMatchedMPs;
+    //             vOutlierKeys = mvOutlierKeys;
+    //             vpOutlierMPs = mvpOutlierMPs;
+    //             mProjectPoints = mmProjectPoints;
+    //             mMatchedInImage = mmMatchedInImage;
+
+    //         }
+    //         else if(mState==Tracking::LOST)
+    //         {
+    //             vCurrentKeys = mvCurrentKeys;
+    //             vCurrentKeysLine = mvCurrentLines;
+    //         }
+    //     }
+
+    //     if(im.channels()<3) //this should be always true
+    //         cvtColor(im,im,cv::COLOR_GRAY2BGR);
+
+    //     //Draw
+    //     if(state==Tracking::NOT_INITIALIZED)
+    //     {
+    //         for(unsigned int i=0; i<vMatches.size(); i++)
+    //         {
+    //             if(vMatches[i]>=0)
+    //             {
+    //                 cv::line(im,vIniKeys[i].pt,vCurrentKeys[vMatches[i]].pt,
+    //                         cv::Scalar(0,255,0));
+    //             }
+    //         }
+    //         for(vector<pair<cv::Point2f, cv::Point2f> >::iterator it=vTracks.begin(); it!=vTracks.end(); it++)
+    //             cv::line(im,(*it).first,(*it).second, cv::Scalar(0,255,0),5);
+
+    //     }
+    //     else if(state==Tracking::OK && bOldFeatures) //TRACKING
+    //     {
+    //         mnTracked=0;
+    //         mnTrackedVO=0;
+    //         mnTrackedLine=0;
+    //         mnTrackedVOLine=0;
+    //         const float r = 5;
+    //         int n = vCurrentKeys.size();
+    //         for(int i=0;i<n;i++)
+    //         {
+    //             if(vbVO[i] || vbMap[i])
+    //             {
+    //                 cv::Point2f pt1,pt2;
+    //                 pt1.x=vCurrentKeys[i].pt.x-r;
+    //                 pt1.y=vCurrentKeys[i].pt.y-r;
+    //                 pt2.x=vCurrentKeys[i].pt.x+r;
+    //                 pt2.y=vCurrentKeys[i].pt.y+r;
+
+    //                 // This is a match to a MapPoint in the map
+    //                 if(vbMap[i])
+    //                 {
+    //                     cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
+    //                     cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
+    //                     mnTracked++;
+    //                 }
+    //                 else // This is match to a "visual odometry" MapPoint created in the last frame
+    //                 {
+    //                     cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
+    //                     cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
+    //                     mnTrackedVO++;
+    //                 }
+    //             }
+    //         }
+    //         // draw line features
+    //         int nl = vCurrentKeysLine.size();
+    //         for(int i=0; i<nl; ++i)
+    //         {
+    //             cv::Point2f sp, ep;
+    //             sp.x = int(vCurrentKeysLine[i].startPointX);
+    //             sp.y = int(vCurrentKeysLine[i].startPointY);
+    //             ep.x = int(vCurrentKeysLine[i].endPointX);
+    //             ep.y = int(vCurrentKeysLine[i].endPointY);
+    //             if (vbMapLine[i]) {
+    //                 cv::line(im, sp, ep, cv::Scalar(0,0,255), 1.5);                     // Red
+    //                 ++mnTrackedLine;
+    //             }
+    //             else {
+    //                 cv::line(im, sp, ep, cv::Scalar(255,0,255), 1.5);                   // Magenta
+    //                 ++mnTrackedVOLine;
+    //             }
+    //         }
+    //     }
+    //     else if(state==Tracking::OK && !bOldFeatures)
+    //     {
+    //         mnTracked=0;
+    //         mnTrackedLine=0;
+    //         int nTracked2 = 0;
+    //         mnTrackedVO=0;
+    //         mnTrackedVOLine=0;
+    //         int n = vCurrentKeys.size();
+
+    //         for(int i=0; i < n; ++i)
+    //         {
+
+    //             // This is a match to a MapPoint in the map
+    //             if(vbMap[i])
+    //             {
+    //                 mnTracked++;
+    //             }
+    //         }
+
+    //         n = mProjectPoints.size();
+    //         map<long unsigned int, cv::Point2f>::iterator it_match = mMatchedInImage.begin();
+    //         while(it_match != mMatchedInImage.end())
+    //         {
+    //             long unsigned int mp_id = it_match->first;
+    //             cv::Point2f p_image = it_match->second;
+
+    //             if(mProjectPoints.find(mp_id) != mProjectPoints.end())
+    //             {
+    //                 cv::Point2f p_proj = mMatchedInImage[mp_id];
+    //                 cv::line(im, p_proj, p_image, cv::Scalar(0, 255, 0), 2);
+    //                 nTracked2++;
+    //             }
+    //             else
+    //             {
+    //                 cv::circle(im,p_image,2,cv::Scalar(0,0,255),-1);
+    //             }
+
+    //             it_match++;
+    //         }
+    //         n = vOutlierKeys.size();
+    //         for(int i = 0; i < n; ++i)
+    //         {
+    //             cv::Point2f point3d_proy;
+    //             float u, v;
+    //             currentFrame.ProjectPointDistort(vpOutlierMPs[i] , point3d_proy, u, v);
+
+    //             cv::Point2f point_im = vOutlierKeys[i].pt;
+
+    //             cv::line(im,cv::Point2f(u, v), point_im,cv::Scalar(0, 0, 255), 1);
+    //         }
+    //         // draw line features
+    //         int nl = vCurrentKeysLine.size();
+    //         for(int i=0; i<nl; ++i)
+    //         {
+    //             if(vbVOLine[i] || vbMapLine[i])
+    //             {
+    //                 cv::Point2f sp, ep;
+    //                 sp.x = int(vCurrentKeysLine[i].startPointX);
+    //                 sp.y = int(vCurrentKeysLine[i].startPointY);
+    //                 ep.x = int(vCurrentKeysLine[i].endPointX);
+    //                 ep.y = int(vCurrentKeysLine[i].endPointY);
+    //                 if(vbMapLine[i]) {
+    //                     cv::line(im, sp, ep, cv::Scalar(0,0,255), 1.5);                     // Red
+    //                     ++mnTrackedLine;
+    //                 }
+    //                 else {
+    //                     cv::line(im, sp, ep, cv::Scalar(255,0,255), 1.5);                   // Magenta
+    //                     ++mnTrackedVOLine;
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     cv::Mat imWithInfo;
+    //     DrawTextInfoWithLines(im,state, imWithInfo);
+
+    //     return imWithInfo;
+    // }
+
 
     cv::Mat FrameDrawer::DrawRightFrame(float imageScale)
     {
@@ -667,6 +880,8 @@ namespace ORB_SLAM3
         mvCurrentKeys = pTracker->mCurrentFrame.mvKeys;
         mvCurrentKeysMoving = pTracker->mCurrentFrame.mvKeysMoving;
         mvCurrentKeysSemantic = pTracker->mCurrentFrame.mvSemanticCls;
+        mvCurrentLinesMoving = pTracker->mCurrentFrame.mvLinesMoving;
+        mvCurrentLinesSemantic = pTracker->mCurrentFrame.mvSemanticClsLines;
 
         mvCurrentLines = pTracker->mCurrentFrame.mvKeysLine;
 
@@ -678,6 +893,7 @@ namespace ORB_SLAM3
             mvCurrentKeysRight = pTracker->mCurrentFrame.mvKeysRight;
             pTracker->mImRight.copyTo(mImRight);
             N = mvCurrentKeys.size() + mvCurrentKeysRight.size();
+            N_Lines = mvCurrentLines.size();
         }
         else
         {
@@ -705,8 +921,11 @@ namespace ORB_SLAM3
         mvOutlierKeys.reserve(N);
         mvpOutlierMPs.clear();
         mvpOutlierMPs.reserve(N);
+
         mvCurrentMapSemantic.clear();
         mvCurrentMapSemantic.resize(N);
+        mvCurrentMapLinesSemantic.clear();
+        mvCurrentMapLinesSemantic.resize(N_Lines);
 
         if (pTracker->mLastProcessedState == Tracking::NOT_INITIALIZED)
         {
@@ -748,6 +967,7 @@ namespace ORB_SLAM3
                             mvbMapLine[i]=true;
                         else
                             mvbVOLine[i]=true;
+                        mvCurrentMapLinesSemantic[i] = pML->mvSemanticCls;
                     }
                 }
             }

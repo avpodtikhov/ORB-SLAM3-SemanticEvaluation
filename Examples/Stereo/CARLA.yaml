@@ -80,6 +80,10 @@ Semantic.UseInstance: 0
 # Use semantic to improve loop closure
 Semantic.UseSemanticLoop: 0
 
+# Use hard semantic lines
+Semantic.HardSemanticLines: 0
+# Use hard instance lines
+Semantic.HardInstanceLines: 1
 
 #--------------------------------------------------------------------------------------------
 # Viewer Parameters

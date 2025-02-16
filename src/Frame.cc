@@ -348,8 +348,8 @@ namespace ORB_SLAM3
 
         mTimeORB_Ext = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndExtORB - time_StartExtORB).count();
 #endif
-
-        processSemanticKeyPoints(imLeftSem, dynamic_flag);
+        if (dynamic_flag)
+            processSemanticKeyPoints(imLeftSem);
 
         N = mvKeys.size();
         if (mvKeys.empty())
@@ -431,7 +431,7 @@ namespace ORB_SLAM3
     //  Semantic Stereo Frame with Lines
     Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight,
     LineExtractor* LineExtractorLeft, LineExtractor* LineExtractorRight, ORBVocabulary *voc, LineVocabulary* voc_line,
-    cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF, const IMU::Calib &ImuCalib, const bool moving_flag, const bool dynamic_flag, const bool semantic_flag, const bool instance_flag)
+    cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF, const IMU::Calib &ImuCalib, const bool moving_flag, const bool dynamic_flag, const bool semantic_flag, const bool instance_flag, const bool hard_semantic_lines_flag, const bool hard_instance_lines_flag)
         : mpcpi(nullptr), mbHasPose(false), mbHasVelocity(false), mpORBvocabulary(voc), mpLineVocabulary(voc_line), mpORBextractorLeft(extractorLeft), mpORBextractorRight(extractorRight), mpLineExtractorLeft(LineExtractorLeft), mpLineExtractorRight(LineExtractorRight), mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)), mDistCoef(distCoef.clone()),
           mbf(bf), mThDepth(thDepth), mImuCalib(ImuCalib), mpImuPreintegrated(nullptr), mpPrevFrame(pPrevF), mpImuPreintegratedFrame(nullptr), mpReferenceKF(static_cast<KeyFrame *>(nullptr)),
           mbIsSet(false), mbImuPreintegrated(false), mpCamera(pCamera), mpCamera2(nullptr)
@@ -462,14 +462,36 @@ namespace ORB_SLAM3
 
         mTimeORB_Ext = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndExtORB - time_StartExtORB).count();
 #endif
-        processSemanticKeyPoints(imLeftSem, dynamic_flag);
+
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_StartExtLine = std::chrono::steady_clock::now();
+#endif
+        thread threadLeft_Line(&Frame::ExtractLine,this,0,imLeft);
+        thread threadRight_Line(&Frame::ExtractLine,this,1,imRight);
+        threadLeft_Line.join();
+        threadRight_Line.join();
+#ifdef REGISTER_TIMES
+        std::chrono::steady_clock::time_point time_EndExtLine = std::chrono::steady_clock::now();
+
+        mTimeLine_Ext = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndExtLine - time_StartExtLine).count();
+#endif
+
+        if (dynamic_flag) {
+            processSemanticKeyPoints(imLeftSem);
+            processSemanticLines(imLeftSem);
+        }
+
+        if (hard_semantic_lines_flag) {
+            processHardSemanticLines(imLeftSem);
+        } else if (hard_instance_lines_flag) {
+            processHardInstanceLines(imLeftSem);
+        }
+        
 
         N = mvKeys.size();
-        if (mvKeys.empty())
-            return;
+        N_Lines = mvKeysLine.size();
 
-        N = mvKeys.size();
-        if (mvKeys.empty())
+        if (N + N_Lines == 0)
             return;
 
         UndistortKeyPoints();
@@ -488,28 +510,6 @@ namespace ORB_SLAM3
         mmProjectPoints.clear();
         mmMatchedInImage.clear();
 
-
-        mvSemanticCls = vector<int>(N, 0);
-        mvInstanceCls = vector<int>(N, 0);
-        mvKeysMoving = vector<bool>(N, false);
-
-        for (int i = 0; i < mvKeys.size(); i++) {
-            updateSemanticInfo(i, imLeftSem);
-        }
-#ifdef REGISTER_TIMES
-        std::chrono::steady_clock::time_point time_StartExtLine = std::chrono::steady_clock::now();
-#endif
-        thread threadLeft_Line(&Frame::ExtractLine,this,0,imLeft);
-        thread threadRight_Line(&Frame::ExtractLine,this,1,imRight);
-        threadLeft_Line.join();
-        threadRight_Line.join();
-#ifdef REGISTER_TIMES
-        std::chrono::steady_clock::time_point time_EndExtLine = std::chrono::steady_clock::now();
-
-        mTimeLine_Ext = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndExtLine - time_StartExtLine).count();
-#endif
-        N_Lines = mvKeysLine.size();
-       
         UndistortLines();
 
 #ifdef REGISTER_TIMES
@@ -523,6 +523,20 @@ namespace ORB_SLAM3
 #endif
         mvpMapLines = vector<MapLine*>(N_Lines,static_cast<MapLine*>(nullptr));
         mvbOutlierLine = vector<bool>(N_Lines,false);
+
+        mvSemanticCls = vector<int>(N, 0);
+        mvInstanceCls = vector<int>(N, 0);
+        mvKeysMoving = vector<bool>(N, false);
+        mvSemanticClsLines = vector<int>(N_Lines, 0);
+        mvInstanceClsLines = vector<int>(N_Lines, 0);
+        mvLinesMoving = vector<bool>(N_Lines, false);
+
+
+        for (int i = 0; i < mvKeys.size(); i++)
+            updateSemanticInfo(i, imLeftSem);
+
+        for (int i = 0; i < mvKeysLine.size(); i++)
+            updateSemanticInfoLine(i, imLeftSem);
 
         // This is done only for the first Frame (or after a change in the calibration)
         if (mbInitialComputations)
@@ -757,64 +771,221 @@ namespace ORB_SLAM3
         mpMutexImu = new std::mutex();
     }
 
-    void Frame::processSemanticKeyPoints(const cv::Mat &imLeftSem, bool dynamic_flag) {
-        if (dynamic_flag) {
-            std::vector<cv::KeyPoint> KeysClear;
-            cv::Mat DescriptorsClear;
-            
-            // Filter keypoints based on semantic information
-            for (auto & mvKey : mvKeys) {
-                bool flag = false;
-                for (int i1 = -5; i1 < 6; i1++) {
-                    for (int i2 = -5; i2 < 6; i2++) {
-                        if (((int)mvKey.pt.x + i1 < 0) || ((int)mvKey.pt.x + i1 >= imLeftSem.rows)) {
-                            continue;
-                        }
-                        if (((int)mvKey.pt.y + i2 < 0) || ((int)mvKey.pt.y + i2 >= imLeftSem.cols)) {
-                            continue;
-                        }
-                        int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKey.pt.x + i1, (int)mvKey.pt.y + i2)))[0];
-                        if ((cls == 4) || (cls == 10)) {
-                            flag = true;
-                            break;
-                        }
-                    }
-                    if (flag) break;
-                }
-                if (!flag) {
-                    KeysClear.push_back(mvKey);
-                }
-            }
+    void Frame::processSemanticKeyPoints(const cv::Mat &imLeftSem) {
+        std::vector<cv::KeyPoint> KeysClear;
+        cv::Mat DescriptorsClear;
+        std::vector<int> KeysIdx;
 
-            // Update descriptors
-            DescriptorsClear.create(KeysClear.size(), 32, CV_8U);
-            int j = 0;
-            for (int i = 0; i < mvKeys.size(); i++) {
-                bool flag = false;
-                for (int i1 = -5; i1 < 6; i1++) {
-                    for (int i2 = -5; i2 < 6; i2++) {
-                        if (((int)mvKeys[i].pt.x + i1 < 0) || ((int)mvKeys[i].pt.x + i1 >= imLeftSem.rows)) {
-                            continue;
-                        }
-                        if (((int)mvKeys[i].pt.y + i2 < 0) || ((int)mvKeys[i].pt.y + i2 >= imLeftSem.cols)) {
-                            continue;
-                        }
-                        int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKeys[i].pt.x + i1, (int)mvKeys[i].pt.y + i2)))[0];
-                        if ((cls == 4) || (cls == 10)) {
-                            flag = true;
-                            break;
-                        }
+        // Filter keypoints based on semantic information
+        for (int i = 0; i < mvKeys.size(); i++) {
+            bool flag = false;
+            auto mvKey = mvKeys[i];
+            for (int i1 = -5; i1 < 6; i1++) {
+                for (int i2 = -5; i2 < 6; i2++) {
+                    if (((int)mvKey.pt.x + i1 < 0) || ((int)mvKey.pt.x + i1 >= imLeftSem.rows)) {
+                        continue;
                     }
-                    if (flag) break;
+                    if (((int)mvKey.pt.y + i2 < 0) || ((int)mvKey.pt.y + i2 >= imLeftSem.cols)) {
+                        continue;
+                    }
+                    int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point((int)mvKey.pt.x + i1, (int)mvKey.pt.y + i2)))[0];
+                    if ((cls == 4) || (cls == 10)) {
+                        flag = true;
+                        break;
+                    }
                 }
-                if (!flag) {
-                    mDescriptors.row(i).copyTo(DescriptorsClear.row(j));
-                    j += 1;
+                if (flag) break;
+            }
+            if (!flag) {
+                KeysClear.push_back(mvKeys[i]);
+                KeysIdx.push_back(i);
+            }
+        }
+
+        // Update descriptors
+        DescriptorsClear.create(KeysClear.size(), 32, CV_8U);
+        for (int i = 0; i < KeysClear.size(); i++) {
+            mDescriptors.row(KeysIdx[i]).copyTo(DescriptorsClear.row(i));
+        }
+        mvKeys = KeysClear;
+        mDescriptors = DescriptorsClear;
+    }
+
+    void Frame::processSemanticLines(const cv::Mat &imLeftSem) {
+        std::vector<cv::line_descriptor::KeyLine> LinesClear;
+        std::vector<int> LinesIdx;
+        cv::Mat DescriptorsClearLine;
+        
+        // Filter keypoints based on semantic information
+        for (int i = 0; i < mvKeysLine.size(); i++) {
+            float startX = mvKeysLine[i].startPointX;
+            float startY = mvKeysLine[i].startPointY;
+            float endX = mvKeysLine[i].endPointX;
+            float endY = mvKeysLine[i].endPointY;
+
+            float dx = endX - startX;
+            float dy = endY - startY;
+            float length = sqrt(dx*dx + dy*dy);
+
+            int numSamples = std::max(2, static_cast<int>(length/2.0));
+
+            std::vector<int> sampledClasses;
+            sampledClasses.reserve(numSamples);
+
+            bool flag = false;
+
+            // Sample points along the line
+            for(int j = 0; j < numSamples; j++) {
+                float t = j / float(numSamples - 1);  // Parameter from 0 to 1
+                int x = round(startX + t * dx);
+                int y = round(startY + t * dy);
+                
+                // Check bounds
+                if(x < 0 || x >= imLeftSem.cols || y < 0 || y >= imLeftSem.rows)
+                    continue;
+                    
+                int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point(x, y))[0]);
+                sampledClasses.push_back(cls);
+
+                // Если хотя бы одна точка на линии относится к динамическому объекту - не берем ее
+                if ((cls == 4) || (cls == 10)) {
+                    flag = true;
+                    break;
                 }
             }
-            mvKeys = KeysClear;
-            mDescriptors = DescriptorsClear;
+            if (!flag) {
+                LinesClear.push_back(mvKeysLine[i]);
+                LinesIdx.push_back(i);
+            }
         }
+
+        // Update descriptors
+        DescriptorsClearLine.create(LinesClear.size(), 32, CV_8U);
+        for (int i = 0; i < LinesClear.size(); i++) {
+            mDescriptorsLine.row(LinesIdx[i]).copyTo(DescriptorsClearLine.row(i));
+        }
+        mvKeysLine = LinesClear;
+        mDescriptorsLine = DescriptorsClearLine;
+    }
+
+
+    void Frame::processHardSemanticLines(const cv::Mat &imLeftSem) {
+        int prev_count = mvKeysLine.size();
+        std::vector<cv::line_descriptor::KeyLine> LinesClear;
+        std::vector<int> LinesIdx;
+        cv::Mat DescriptorsClearLine;
+        
+        // Filter keypoints based on semantic information
+        for (int i = 0; i < mvKeysLine.size(); i++) {
+            float startX = mvKeysLine[i].startPointX;
+            float startY = mvKeysLine[i].startPointY;
+            float endX = mvKeysLine[i].endPointX;
+            float endY = mvKeysLine[i].endPointY;
+
+            float dx = endX - startX;
+            float dy = endY - startY;
+            float length = sqrt(dx*dx + dy*dy);
+
+            int numSamples = std::max(2, static_cast<int>(length/2.0));
+
+            std::vector<int> sampledClasses;
+            sampledClasses.reserve(numSamples);
+
+            bool flag = false;
+            int prev_cls = -1;
+            // Sample points along the line
+            for(int j = 0; j < numSamples; j++) {
+                float t = j / float(numSamples - 1);  // Parameter from 0 to 1
+                int x = round(startX + t * dx);
+                int y = round(startY + t * dy);
+                
+                // Check bounds
+                if(x < 0 || x >= imLeftSem.cols || y < 0 || y >= imLeftSem.rows)
+                    continue;
+                    
+                int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point(x, y))[0]);
+                sampledClasses.push_back(cls);
+                if (prev_cls == -1) {
+                    prev_cls = cls;
+                } else if (prev_cls != cls) {
+                    flag = true;
+                    break;
+                }
+            }
+            if (!flag) {
+                LinesClear.push_back(mvKeysLine[i]);
+                LinesIdx.push_back(i);
+            }
+        }
+
+        // Update descriptors
+        DescriptorsClearLine.create(LinesClear.size(), 32, CV_8U);
+        for (int i = 0; i < LinesClear.size(); i++) {
+            mDescriptorsLine.row(LinesIdx[i]).copyTo(DescriptorsClearLine.row(i));
+        }
+        mvKeysLine = LinesClear;
+        mDescriptorsLine = DescriptorsClearLine;
+        std::cout << "Hard semantic lines: " << prev_count - mvKeysLine.size() << std::endl;
+    }
+
+    void Frame::processHardInstanceLines(const cv::Mat &imLeftSem) {
+        int prev_count = mvKeysLine.size();
+        std::vector<cv::line_descriptor::KeyLine> LinesClear;
+        std::vector<int> LinesIdx;
+        cv::Mat DescriptorsClearLine;
+        
+        // Filter keypoints based on semantic information
+        for (int i = 0; i < mvKeysLine.size(); i++) {
+            float startX = mvKeysLine[i].startPointX;
+            float startY = mvKeysLine[i].startPointY;
+            float endX = mvKeysLine[i].endPointX;
+            float endY = mvKeysLine[i].endPointY;
+
+            float dx = endX - startX;
+            float dy = endY - startY;
+            float length = sqrt(dx*dx + dy*dy);
+
+            int numSamples = std::max(2, static_cast<int>(length/2.0));
+
+            std::vector<int> sampledClasses;
+            sampledClasses.reserve(numSamples);
+
+            bool flag = false;
+            int prev_cls = -1;
+            // Sample points along the line
+            for(int j = 0; j < numSamples; j++) {
+                float t = j / float(numSamples - 1);  // Parameter from 0 to 1
+                int x = round(startX + t * dx);
+                int y = round(startY + t * dy);
+                
+                // Check bounds
+                if(x < 0 || x >= imLeftSem.cols || y < 0 || y >= imLeftSem.rows)
+                    continue;
+                    
+                int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point(x, y))[1]) * 1000 + 
+                            (int)(imLeftSem.at<cv::Vec3b>(cv::Point(x, y)))[2];
+                sampledClasses.push_back(cls);
+                if (prev_cls == -1) {
+                    prev_cls = cls;
+                } else if (prev_cls != cls) {
+                    flag = true;
+                    break;
+                }
+            }
+            if (!flag) {
+                LinesClear.push_back(mvKeysLine[i]);
+                LinesIdx.push_back(i);
+            }
+        }
+
+        // Update descriptors
+        DescriptorsClearLine.create(LinesClear.size(), 32, CV_8U);
+        for (int i = 0; i < LinesClear.size(); i++) {
+            mDescriptorsLine.row(LinesIdx[i]).copyTo(DescriptorsClearLine.row(i));
+        }
+        mvKeysLine = LinesClear;
+        mDescriptorsLine = DescriptorsClearLine;
+        std::cout << "Hard instance lines: " << prev_count - mvKeysLine.size() << std::endl;
     }
 
     void Frame::updateSemanticInfo(const unsigned int i, const cv::Mat &imLeftSem) {
@@ -851,6 +1022,97 @@ namespace ORB_SLAM3
             mvInstanceCls[i] = instance_cls;
         }
     }
+
+    void Frame::updateSemanticInfoLine(const unsigned int i, const cv::Mat &imLeftSem) {
+        bool flag = false;
+        const cv::line_descriptor::KeyLine &line = mvKeysLine[i];
+        float startX = line.startPointX;
+        float startY = line.startPointY;
+        float endX = line.endPointX;
+        float endY = line.endPointY;
+
+        float dx = endX - startX;
+        float dy = endY - startY;
+        float length = sqrt(dx*dx + dy*dy);
+
+        int numSamples = std::max(2, static_cast<int>(length/2.0));
+
+        std::vector<int> sampledClasses;
+        std::vector<int> sampledInstances;
+        sampledClasses.reserve(numSamples);
+        sampledInstances.reserve(numSamples);
+
+        // Sample points along the line
+        for(int j = 0; j < numSamples; j++) {
+            float t = j / float(numSamples - 1);  // Parameter from 0 to 1
+            int x = round(startX + t * dx);
+            int y = round(startY + t * dy);
+            
+            // Check bounds
+            if(x < 0 || x >= imLeftSem.cols || y < 0 || y >= imLeftSem.rows)
+                continue;
+                
+            int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point(x, y))[0]);
+            int instance_cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point(x, y))[1]) * 1000 + 
+                            (int)(imLeftSem.at<cv::Vec3b>(cv::Point(x, y)))[2];
+            sampledClasses.push_back(cls);
+            sampledInstances.push_back(instance_cls);
+        }
+        if(!sampledClasses.empty()) {
+            std::sort(sampledClasses.begin(), sampledClasses.end());
+            int currentClass = sampledClasses[0];
+            int currentCount = 1;
+            int maxClass = currentClass;
+            int maxCount = 1;
+            
+            for(size_t j = 1; j < sampledClasses.size(); j++) {
+                if(sampledClasses[j] == currentClass) {
+                    currentCount++;
+                } else {
+                    if(currentCount > maxCount) {
+                        maxCount = currentCount;
+                        maxClass = currentClass;
+                    }
+                    currentClass = sampledClasses[j];
+                    currentCount = 1;
+                }
+            }
+            
+            // Check last group
+            if(currentCount > maxCount) {
+                maxClass = currentClass;
+            }
+            mvSemanticClsLines[i] = maxClass;
+        }
+        if(!sampledInstances.empty()) {
+            std::sort(sampledInstances.begin(), sampledInstances.end());
+            int currentInstance = sampledInstances[0];
+            int currentCount = 1;
+            int maxInstance = currentInstance;
+            int maxCount = 1;
+            
+            for(size_t j = 1; j < sampledInstances.size(); j++) {
+                if(sampledInstances[j] == currentInstance) {
+                    currentCount++;
+                } else {
+                    if(currentCount > maxCount) {
+                        maxCount = currentCount;
+                        maxInstance = currentInstance;
+                    }
+                    currentInstance = sampledInstances[j];
+                    currentCount = 1;
+                }
+            }
+            
+            // Check last group
+            if(currentCount > maxCount) {
+                maxInstance = currentInstance;
+            }
+            mvInstanceClsLines[i] = maxInstance;
+            mvLinesMoving[i] = (semantic_meta.find(maxInstance) != semantic_meta.end()) && semantic_meta[maxInstance];
+        }
+    }
+    
 
     void Frame::AssignFeaturesToGrid()
     {
@@ -1092,13 +1354,15 @@ namespace ORB_SLAM3
         Eigen::Matrix<float, 3, 1> ep_eigen = sep.tail(3);
         {
             const Eigen::Matrix<float, 3, 1> Pc = mRcw * sp_eigen + mtcw;
-            const float Pc_dist = Pc.norm();
+            // const float Pc_dist = Pc.norm();
 
             // Check positive depth
             const float &PcZ = Pc(2);
-            const float invz = 1.0f / PcZ;
+
             if (PcZ < 0.0f)
                 return false;
+
+            const float invz = 1.0f / PcZ;
 
             const Eigen::Vector2f uv = mpCamera->project(Pc);
 
@@ -1113,7 +1377,7 @@ namespace ORB_SLAM3
         {
             // 3D in camera coordinates
             const Eigen::Matrix<float, 3, 1> Pc = mRcw * ep_eigen + mtcw;
-            const float Pc_dist = Pc.norm();
+            // const float Pc_dist = Pc.norm();
 
             // Check positive depth
             const float &PcZ = Pc(2);
@@ -1132,7 +1396,7 @@ namespace ORB_SLAM3
             pML->mTrackProjeY = uv(1);
         }
 
-        Eigen::Matrix<float, 3, 1> MidPoint = (sp_eigen+ep_eigen)/2;
+        Eigen::Matrix<float, 3, 1> MidPoint = (sp_eigen + ep_eigen) / 2;
 
         // Check distance is in the scale invariance region of the MapPoint
         const float maxDistance = pML->GetMaxDistanceInvariance();
@@ -1160,7 +1424,6 @@ namespace ORB_SLAM3
 
     bool Frame::ProjectPointDistort(MapPoint *pMP, cv::Point2f &kp, float &u, float &v)
     {
-
         // 3D in absolute coordinates
         Eigen::Vector3f P = pMP->GetWorldPos();
 

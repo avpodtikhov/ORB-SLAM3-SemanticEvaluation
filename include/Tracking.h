@@ -123,6 +123,8 @@ public:
     bool mDropDynamic;
     bool mUseSemantic;
     bool mUseInstance;
+    bool mHardSemanticLines;
+    bool mHardInstanceLines;
 
     bool mUseLines;
     int mLinesExtractor;

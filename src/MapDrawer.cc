@@ -204,6 +204,31 @@ namespace ORB_SLAM3
 
     void MapDrawer::DrawMapLines()
     {
+        cv::Scalar color0(0, 0, 0);
+        cv::Scalar color1(70. / 255, 70. / 255, 70. / 255);
+        cv::Scalar color2(100. / 255, 40. / 255, 40. / 255);
+        cv::Scalar color3(55. / 255, 90. / 255, 80. / 255);
+        cv::Scalar color4(220. / 255, 20. / 255, 60. / 255);
+        cv::Scalar color5(153. / 255, 153. / 255, 153. / 255);
+        cv::Scalar color6(157. / 255, 234. / 255, 50. / 255);
+        cv::Scalar color7(128. / 255, 64. / 255, 128. / 255);
+        cv::Scalar color8(244. / 255, 35. / 255, 232. / 255);
+        cv::Scalar color9(107. / 255, 142. / 255, 35. / 255);
+        cv::Scalar color10(0. / 255, 0. / 255, 142. / 255);
+        cv::Scalar color11(102. / 255, 102. / 255, 156. / 255);
+        cv::Scalar color12(220. / 255, 220. / 255, 0 / 255);
+        cv::Scalar color13(70. / 255, 130. / 255, 180. / 255);
+        cv::Scalar color14(81. / 255, 0 / 255, 81. / 255);
+        cv::Scalar color15(150. / 255, 100. / 255, 100. / 255);
+        cv::Scalar color16(230. / 255, 150. / 255, 140. / 255);
+        cv::Scalar color17(180. / 255, 165. / 255, 180. / 255);
+        cv::Scalar color18(250. / 255, 170. / 255, 30. / 255);
+        cv::Scalar color19(110. / 255, 190. / 255, 160. / 255);
+        cv::Scalar color20(170. / 255, 120. / 255, 50. / 255);
+        cv::Scalar color21(45. / 255, 60. / 255, 150. / 255);
+        cv::Scalar color22(145. / 255, 170. / 255, 100. / 255);
+        std::vector<cv::Scalar> color_palette = {color0, color1, color2, color3, color4, color5, color6, color7, color8, color9, color10, color11, color12, color13, color14, color15, color16, color17, color18, color19, color20, color21, color22};
+
         const vector<MapLine*> &vpMLs = mpAtlas->GetAllMapLines();
         const vector<MapLine*> &vpRefMLs = mpAtlas->GetReferenceMapLines();
 
@@ -215,12 +240,15 @@ namespace ORB_SLAM3
         float mLineSize = 1.0;
 
         glLineWidth(mLineSize);
-        glColor3f(0.0,0.0,0.0);
+        // glColor3f(0.0,0.0,0.0);
         glBegin(GL_LINES);
         for(size_t i=0, iend=vpMLs.size(); i<iend;i++)
         {
             if(vpMLs[i]->isBad() || spRefMLs.count(vpMLs[i]))
                 continue;
+            glColor3f(color_palette[vpMLs[i]->mvSemanticCls][0], 
+                     color_palette[vpMLs[i]->mvSemanticCls][1], 
+                     color_palette[vpMLs[i]->mvSemanticCls][2]);
             Eigen::Matrix<float,6,1> sep = vpMLs[i]->GetWorldPos();
             Eigen::Matrix<float,3,1> sp_eigen = sep.head(3);
             Eigen::Matrix<float,3,1> ep_eigen = sep.tail(3);

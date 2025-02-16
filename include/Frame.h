@@ -71,7 +71,7 @@ namespace ORB_SLAM3
         Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), const bool moving_flag = false, const bool dynamic_flag = false, const bool semantic_flag = false, const bool instance_flag = false);
 
         // Constructor for stereo cameras with semantic and lines.
-        Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight, LineExtractor* LineExtractorLeft, LineExtractor* LineExtractorRight, ORBVocabulary *voc, LineVocabulary* voc_line, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), const bool moving_flag = false, const bool dynamic_flag = false, const bool semantic_flag = false, const bool instance_flag = false);
+        Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight, LineExtractor* LineExtractorLeft, LineExtractor* LineExtractorRight, ORBVocabulary *voc, LineVocabulary* voc_line, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), const bool moving_flag = false, const bool dynamic_flag = false, const bool semantic_flag = false, const bool instance_flag = false, const bool hard_semantic_lines_flag = false, const bool hard_instance_lines_flag = false);
 
         // Constructor for RGB-D cameras.
         Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor *extractor, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
@@ -256,6 +256,10 @@ namespace ORB_SLAM3
 
         std::vector<bool> mvKeysMoving;
         std::vector<int> mvSemanticCls, mvInstanceCls;
+        std::vector<int> mvSemanticClsLines;
+        std::vector<int> mvInstanceClsLines;
+        std::vector<bool> mvLinesMoving;
+
         unordered_map<int, bool> semantic_meta;
 
         // Vector of keypoints (original for visualization) and undistorted (actually used by the system).
@@ -397,8 +401,12 @@ namespace ORB_SLAM3
         void AssignFeaturesToGrid();
 
         // Semantic processing methods
-        void processSemanticKeyPoints(const cv::Mat &imLeftSem, bool dynamic_flag = false);
+        void processSemanticKeyPoints(const cv::Mat &imLeftSem);
+        void processSemanticLines(const cv::Mat &imLeftSem);
+        void processHardSemanticLines(const cv::Mat &imLeftSem);
+        void processHardInstanceLines(const cv::Mat &imLeftSem);
         void updateSemanticInfo(const unsigned int i, const cv::Mat &imLeftSem);
+        void updateSemanticInfoLine(const unsigned int i, const cv::Mat &imLeftSem);
 
         bool mbIsSet;
 

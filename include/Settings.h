@@ -135,6 +135,9 @@ namespace ORB_SLAM3 {
         float linesLsdScale() const {return mbLinesLsdScale;}
         int linesLevels() const {return mbLinesLevels;}
         float linesScale() const {return mbLinesScale;}
+
+        bool hardSemanticLines() const {return mbHardSemanticLines;}
+        bool hardInstanceLines() const {return mbHardInstanceLines;}
     private:
         template<typename T>
         T readParameter(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required = true) {
@@ -249,6 +252,9 @@ namespace ORB_SLAM3 {
         float mbLinesLsdScale;
         int mbLinesLevels;
         float mbLinesScale;
+
+        bool mbHardSemanticLines;
+        bool mbHardInstanceLines;
         /*
          * Save & load maps
          */

@@ -564,6 +564,8 @@ namespace ORB_SLAM3
         mDropDynamic = settings->dropDynamic();
         mUseSemantic = settings->useSemantic();
         mUseInstance = settings->useInstance();
+        mHardSemanticLines = settings->hardSemanticLines();
+        mHardInstanceLines = settings->hardInstanceLines();
 
         // Lines parameters
         mUseLines = settings->useLines();
@@ -1601,7 +1603,7 @@ namespace ORB_SLAM3
 
         // std::cout << "Incoming frame creation" << endl;
         if (mUseLines)
-            mCurrentFrame = Frame(mImGray, imGrayRight, mImSem, seg_meta, timestamp, mpORBextractorLeft, mpORBextractorRight, mpLineExtractor, mpLineExtractorRight, mpORBVocabulary, mpLineVocabulary, mK, mDistCoef, mbf, mThDepth, mpCamera, static_cast<Frame *>(NULL), IMU::Calib(), mDropMoving, mDropDynamic, mUseSemantic, mUseInstance);
+            mCurrentFrame = Frame(mImGray, imGrayRight, mImSem, seg_meta, timestamp, mpORBextractorLeft, mpORBextractorRight, mpLineExtractor, mpLineExtractorRight, mpORBVocabulary, mpLineVocabulary, mK, mDistCoef, mbf, mThDepth, mpCamera, static_cast<Frame *>(NULL), IMU::Calib(), mDropMoving, mDropDynamic, mUseSemantic, mUseInstance, mHardSemanticLines, mHardInstanceLines);
         else
             mCurrentFrame = Frame(mImGray, imGrayRight, mImSem, seg_meta, timestamp, mpORBextractorLeft, mpORBextractorRight, mpORBVocabulary, mK, mDistCoef, mbf, mThDepth, mpCamera, static_cast<Frame *>(NULL), IMU::Calib(), mDropMoving, mDropDynamic, mUseSemantic, mUseInstance);
         // std::cout << "Incoming frame ended" << endl;
@@ -3100,7 +3102,7 @@ namespace ORB_SLAM3
                     {
                         Eigen::Vector3f x3D = mCurrentFrame.mvStereo3Dpoints[i];
 
-                        auto *pNewMP = new MapPoint(x3D, pKFini, mpAtlas->GetCurrentMap());
+                        auto *pNewMP = new MapPoint(x3D, pKFini, mpAtlas->GetCurrentMap(), mCurrentFrame.mvSemanticClsLines[i], mCurrentFrame.mvInstanceClsLines[i]);
 
                         pNewMP->AddObservation(pKFini, i);
                         pNewMP->AddObservation(pKFini, rightIndex + mCurrentFrame.Nleft);
@@ -3222,7 +3224,7 @@ namespace ORB_SLAM3
                     {
                         Eigen::Vector3f x3D_start, x3D_end;
                         mCurrentFrame.UnprojectStereoLines(i, x3D_start, x3D_end);
-                        auto *pNewML = new MapLine(x3D_start, x3D_end, pKFini, mpAtlas->GetCurrentMap());
+                        auto *pNewML = new MapLine(x3D_start, x3D_end, pKFini, mpAtlas->GetCurrentMap(), mCurrentFrame.mvSemanticClsLines[i], mCurrentFrame.mvInstanceClsLines[i]);
                         pNewML->AddObservation(pKFini, i);
                         pKFini->AddMapLine(pNewML, i);
                         pNewML->ComputeDistinctiveDescriptors();
@@ -3951,7 +3953,7 @@ namespace ORB_SLAM3
                 Eigen::Vector3f x3D_start, x3D_end;
                 mLastFrame.UnprojectStereoLines(i, x3D_start, x3D_end);
 
-                MapLine *pNewML = new MapLine(x3D_start, x3D_end, mpAtlas->GetCurrentMap(), &mLastFrame, i);
+                MapLine *pNewML = new MapLine(x3D_start, x3D_end, mpAtlas->GetCurrentMap(), &mLastFrame, i, mLastFrame.mvSemanticClsLines[i], mLastFrame.mvInstanceClsLines[i]);
                 mLastFrame.mvpMapLines[i] = pNewML;
                 nLines++;
             }
@@ -5129,7 +5131,7 @@ namespace ORB_SLAM3
                         Eigen::Vector3f x3Ds, x3De;
                         mCurrentFrame.UnprojectStereoLines(i, x3Ds, x3De);
 
-                        MapLine *pNewML = new MapLine(x3Ds, x3De, pKF, mpAtlas->GetCurrentMap());
+                        MapLine *pNewML = new MapLine(x3Ds, x3De, pKF, mpAtlas->GetCurrentMap(), mCurrentFrame.mvSemanticClsLines[i], mCurrentFrame.mvInstanceClsLines[i]);
 
                         pNewML->AddObservation(pKF,i);
                         pKF->AddMapLine(pNewML, i);

@@ -36,11 +36,17 @@ namespace ORB_SLAM3
     long unsigned int MapLine::nNextId=0;
     mutex MapLine::mGlobalMutex;
 
-    MapLine::MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP, Map* pMap):
+    MapLine::MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP, Map* pMap, const int semantic_cls, const int instance_cls):
         mnFirstKFid(-1), mnFirstFrame(0), nObs(0), mnTrackReferenceForFrame(0),mnLastFrameSeen(0), mnCorrectedByKF(0), mnCorrectedReference(0),
         mpRefKF(static_cast<KeyFrame*>(NULL)), mnVisible(1), mnFound(1), mnBALocalForKF(0),
         mbBad(false), mpReplaced(static_cast<MapLine*>(NULL)), mpMap(pMap)
     {
+        mvSemanticCls = semantic_cls;
+        mvInstanceCls = instance_cls;
+        mvSemanticDistr = vector<int>(23, 0);
+        mvSemanticDistr[semantic_cls] = 1;
+        mvInstanceDistr[instance_cls] = 1;
+
         SetWorldPos(sP, eP);
         mNormalVector.setZero();
 
@@ -51,11 +57,17 @@ namespace ORB_SLAM3
         currentReferenceKeypointIndex = -1;
     }
 
-    MapLine::MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP, KeyFrame* pRefKF, Map* pMap):
+    MapLine::MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP, KeyFrame* pRefKF, Map* pMap, const int semantic_cls, const int instance_cls):
         mnFirstKFid(pRefKF->mnId), mnFirstFrame(pRefKF->mnFrameId), nObs(0), mnTrackReferenceForFrame(0),mnLastFrameSeen(0), mnCorrectedByKF(0), mnCorrectedReference(0),
         mpRefKF(pRefKF), mnVisible(1), mnFound(1), mnBALocalForKF(0),
         mbBad(false), mpReplaced(static_cast<MapLine*>(NULL)), mpMap(pMap)
     {
+        mvSemanticCls = semantic_cls;
+        mvInstanceCls = instance_cls;
+        mvSemanticDistr = vector<int>(23, 0);
+        mvSemanticDistr[semantic_cls] = 1;
+        mvInstanceDistr[instance_cls] = 1;
+
         SetWorldPos(sP, eP);
         mNormalVector.setZero();
 
@@ -66,11 +78,17 @@ namespace ORB_SLAM3
         currentReferenceKeypointIndex = -1;
     }
 
-    MapLine::MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP,  Map* pMap, Frame* pFrame, const int &idxF):
+    MapLine::MapLine(const Eigen::Vector3f &sP, const Eigen::Vector3f &eP,  Map* pMap, Frame* pFrame, const int &idxF, const int semantic_cls, const int instance_cls):
         mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(0),mnLastFrameSeen(0), mnCorrectedByKF(0), mnCorrectedReference(0),
         mpRefKF(static_cast<KeyFrame*>(NULL)), mnVisible(1), mnFound(1), mnBALocalForKF(0),
         mbBad(false), mpReplaced(static_cast<MapLine*>(NULL)), mpMap(pMap)
     {
+        mvSemanticCls = semantic_cls;
+        mvInstanceCls = instance_cls;
+        mvSemanticDistr = vector<int>(23, 0);
+        mvSemanticDistr[semantic_cls] = 1;
+        mvInstanceDistr[instance_cls] = 1;
+        
         SetWorldPos(sP, eP);
 
         Eigen::Vector3f MidPoint = (sP + eP)/2;
@@ -137,6 +155,29 @@ namespace ORB_SLAM3
         currentReferenceKeypointIndex = refKeyframeIndex;
     }
 
+    void MapLine::AddSemObservation(int semantic_cls)
+    {
+        mvSemanticDistr[semantic_cls] += 1;
+        auto max_value_iter = std::max_element(mvSemanticDistr.begin(), mvSemanticDistr.end());
+        int max_value_idx = std::distance(mvSemanticDistr.begin(), max_value_iter);
+        if (mvSemanticDistr[mvSemanticCls] == *max_value_iter)
+            return;
+        mvSemanticCls = max_value_idx;
+    }
+
+    void MapLine::AddInstanceObservation(int instance_cls)
+    {
+        if (mvInstanceDistr.count(instance_cls))
+            mvInstanceDistr[instance_cls] += 1;
+        else
+            mvInstanceDistr[instance_cls] = 1;
+        auto max_value_iter = std::max_element(mvInstanceDistr.begin(), mvInstanceDistr.end(), [](const std::pair<char, int> &a, const std::pair<char, int> &b) -> bool
+                                               { return a.second < b.second; });
+        int max_value_idx = max_value_iter->first;
+        if (mvInstanceDistr[mvSemanticCls] == max_value_iter->second)
+            return;
+        mvInstanceCls = max_value_idx;
+    }
 
     void MapLine::AddObservation(KeyFrame* pKF, const unsigned long int &projIndex)
     {

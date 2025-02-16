@@ -541,6 +541,8 @@ namespace ORB_SLAM3
         mbUseSemantic = readParameter<bool>(fSettings, "Semantic.UseSemantic", found, false);
         mbUseInstance = readParameter<bool>(fSettings, "Semantic.UseInstance", found, false);
         mbUseLoop = readParameter<bool>(fSettings, "Semantic.UseLoop", found, false);
+        mbHardSemanticLines = readParameter<bool>(fSettings, "Semantic.HardSemanticLines", found, false);
+        mbHardInstanceLines = readParameter<bool>(fSettings, "Semantic.HardInstanceLines", found, false);
     }
 
     void Settings::readLinesParams(cv::FileStorage &fSettings)

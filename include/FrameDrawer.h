@@ -86,7 +86,11 @@ namespace ORB_SLAM3
         vector<bool> mvCurrentKeysMoving;
         vector<int> mvCurrentKeysSemantic;
         vector<int> mvCurrentMapSemantic;
-
+        
+        vector<bool> mvCurrentLinesMoving;
+        vector<int> mvCurrentLinesSemantic;
+        vector<int> mvCurrentMapLinesSemantic;
+        
         map<long unsigned int, cv::Point2f>
             mmProjectPoints;
         map<long unsigned int, cv::Point2f> mmMatchedInImage;
