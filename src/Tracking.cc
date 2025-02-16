@@ -1614,9 +1614,9 @@ namespace ORB_SLAM3
         vdStereoMatch_ms.push_back(mCurrentFrame.mTimeStereoMatch);
 #endif
 
-        std::cout << "Tracking start" << endl;
+        // std::cout << "Tracking start" << endl;
         Track();
-        std::cout << "Tracking end" << endl;
+        // std::cout << "Tracking end" << endl;
 
         return mCurrentFrame.GetPose();
     }
@@ -4087,6 +4087,9 @@ namespace ORB_SLAM3
 
     bool Tracking::TrackWithMotionModelWithLines()
     {
+        if (mCurrentFrame.mnId == 92) {
+            std::cout << "TrackWithMotionModelWithLines" << std::endl;
+        }
         ORBmatcher orb_matcher(0.9, true, mUseSemantic, mUseInstance);
         LineMatcher line_matcher(0.9, 3.0, M_PI/8.0);
 
@@ -5236,7 +5239,7 @@ namespace ORB_SLAM3
     void Tracking::SearchLocalPointsAndLines()
     {
         // Do not search map points already matched
-        std::cout << "SearchLocalPointsAndLines" << std::endl;
+        // std::cout << "SearchLocalPointsAndLines" << std::endl;
         for (vector<MapPoint *>::iterator vit = mCurrentFrame.mvpMapPoints.begin(), vend = mCurrentFrame.mvpMapPoints.end(); vit != vend; vit++)
         {
             MapPoint *pMP = *vit;
@@ -5345,7 +5348,7 @@ namespace ORB_SLAM3
                 nToMatch++;
             }
         }
-        std::cout << "SearchLocalPointsAndLines Points done" << std::endl;
+        // std::cout << "SearchLocalPointsAndLines Points done" << std::endl;
         if(nToMatch > 0)
         {
             LineMatcher matcher(0.9, 3.0, M_PI/10.0);
@@ -5354,7 +5357,7 @@ namespace ORB_SLAM3
                 th = 3;
             int matchesLines = matcher.SearchByProjection(mCurrentFrame, mvpLocalMapLinesInFrustum, true);
         }
-        std::cout << "SearchLocalPointsAndLines Lines done" << std::endl;
+        // std::cout << "SearchLocalPointsAndLines Lines done" << std::endl;
     }
 
     void Tracking::UpdateLocalMap()

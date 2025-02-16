@@ -400,7 +400,7 @@ namespace ORB_SLAM3
 
         Eigen::Vector3f PC = Pos - pRefKF->GetCameraCenter();
         const float dist = PC.norm();
-        const int level = pRefKF->mvKeysUnLine[pRefKF->mnId].octave;
+        const int level = pRefKF->mvKeysUnLine[observations[pRefKF->mnId].projIndex].octave;
         const float levelScaleFactor =  pRefKF->mvScaleFactorsLine[level];
         const int nLevels = pRefKF->mnScaleLevelsLine;
 
