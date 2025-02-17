@@ -138,6 +138,7 @@ namespace ORB_SLAM3 {
 
         bool hardSemanticLines() const {return mbHardSemanticLines;}
         bool hardInstanceLines() const {return mbHardInstanceLines;}
+        std::set<int> linesIncludeClasses() const {return linesIncludeClasses_;}
     private:
         template<typename T>
         T readParameter(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required = true) {
@@ -255,6 +256,7 @@ namespace ORB_SLAM3 {
 
         bool mbHardSemanticLines;
         bool mbHardInstanceLines;
+        std::set<int> linesIncludeClasses_;
         /*
          * Save & load maps
          */

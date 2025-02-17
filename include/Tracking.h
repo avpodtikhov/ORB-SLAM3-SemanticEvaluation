@@ -125,7 +125,7 @@ public:
     bool mUseInstance;
     bool mHardSemanticLines;
     bool mHardInstanceLines;
-
+    std::set<int> mLinesIncludeClasses;
     bool mUseLines;
     int mLinesExtractor;
     int mLinesNFeatures;

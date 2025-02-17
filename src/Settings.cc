@@ -543,6 +543,21 @@ namespace ORB_SLAM3
         mbUseLoop = readParameter<bool>(fSettings, "Semantic.UseLoop", found, false);
         mbHardSemanticLines = readParameter<bool>(fSettings, "Semantic.HardSemanticLines", found, false);
         mbHardInstanceLines = readParameter<bool>(fSettings, "Semantic.HardInstanceLines", found, false);
+
+        std::string linesIncludeClassesPath = readParameter<std::string>(fSettings, "Semantic.LinesIncludeClassesPath", found, false);
+        if (!found || linesIncludeClassesPath.empty()) {
+            linesIncludeClasses_.clear();
+        } else {
+            std::ifstream file(linesIncludeClassesPath);
+            if (!file) {
+                throw std::runtime_error("Error: The file " + linesIncludeClassesPath + " does not exist.");
+            }
+            linesIncludeClasses_.clear();
+            int classId;
+            while (file >> classId) {
+                linesIncludeClasses_.insert(classId);
+            }
+        }
     }
 
     void Settings::readLinesParams(cv::FileStorage &fSettings)

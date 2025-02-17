@@ -566,7 +566,7 @@ namespace ORB_SLAM3
         mUseInstance = settings->useInstance();
         mHardSemanticLines = settings->hardSemanticLines();
         mHardInstanceLines = settings->hardInstanceLines();
-
+        mLinesIncludeClasses = settings->linesIncludeClasses();
         // Lines parameters
         mUseLines = settings->useLines();
         mLinesExtractor = settings->linesExtractor();
@@ -1603,7 +1603,7 @@ namespace ORB_SLAM3
 
         // std::cout << "Incoming frame creation" << endl;
         if (mUseLines)
-            mCurrentFrame = Frame(mImGray, imGrayRight, mImSem, seg_meta, timestamp, mpORBextractorLeft, mpORBextractorRight, mpLineExtractor, mpLineExtractorRight, mpORBVocabulary, mpLineVocabulary, mK, mDistCoef, mbf, mThDepth, mpCamera, static_cast<Frame *>(NULL), IMU::Calib(), mDropMoving, mDropDynamic, mUseSemantic, mUseInstance, mHardSemanticLines, mHardInstanceLines);
+            mCurrentFrame = Frame(mImGray, imGrayRight, mImSem, seg_meta, timestamp, mpORBextractorLeft, mpORBextractorRight, mpLineExtractor, mpLineExtractorRight, mpORBVocabulary, mpLineVocabulary, mK, mDistCoef, mbf, mThDepth, mpCamera, static_cast<Frame *>(NULL), IMU::Calib(), mDropMoving, mDropDynamic, mUseSemantic, mUseInstance, mHardSemanticLines, mHardInstanceLines, mLinesIncludeClasses);
         else
             mCurrentFrame = Frame(mImGray, imGrayRight, mImSem, seg_meta, timestamp, mpORBextractorLeft, mpORBextractorRight, mpORBVocabulary, mK, mDistCoef, mbf, mThDepth, mpCamera, static_cast<Frame *>(NULL), IMU::Calib(), mDropMoving, mDropDynamic, mUseSemantic, mUseInstance);
         // std::cout << "Incoming frame ended" << endl;

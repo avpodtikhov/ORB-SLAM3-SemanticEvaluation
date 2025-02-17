@@ -81,10 +81,11 @@ Semantic.UseInstance: 0
 Semantic.UseSemanticLoop: 0
 
 # Use hard semantic lines
-Semantic.HardSemanticLines: 0
+Semantic.HardSemanticLines: 1
 # Use hard instance lines
-Semantic.HardInstanceLines: 1
-
+Semantic.HardInstanceLines: 0
+# Path to the file containing the classes to include in the lines
+Semantic.LinesIncludeClassesPath: "/home/artur/ROBOTICS/slam_project/slam/classes.txt"
 #--------------------------------------------------------------------------------------------
 # Viewer Parameters
 #--------------------------------------------------------------------------------------------

@@ -431,7 +431,7 @@ namespace ORB_SLAM3
     //  Semantic Stereo Frame with Lines
     Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight,
     LineExtractor* LineExtractorLeft, LineExtractor* LineExtractorRight, ORBVocabulary *voc, LineVocabulary* voc_line,
-    cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF, const IMU::Calib &ImuCalib, const bool moving_flag, const bool dynamic_flag, const bool semantic_flag, const bool instance_flag, const bool hard_semantic_lines_flag, const bool hard_instance_lines_flag)
+    cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF, const IMU::Calib &ImuCalib, const bool moving_flag, const bool dynamic_flag, const bool semantic_flag, const bool instance_flag, const bool hard_semantic_lines_flag, const bool hard_instance_lines_flag, const std::set<int> &lines_include_classes)
         : mpcpi(nullptr), mbHasPose(false), mbHasVelocity(false), mpORBvocabulary(voc), mpLineVocabulary(voc_line), mpORBextractorLeft(extractorLeft), mpORBextractorRight(extractorRight), mpLineExtractorLeft(LineExtractorLeft), mpLineExtractorRight(LineExtractorRight), mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)), mDistCoef(distCoef.clone()),
           mbf(bf), mThDepth(thDepth), mImuCalib(ImuCalib), mpImuPreintegrated(nullptr), mpPrevFrame(pPrevF), mpImuPreintegratedFrame(nullptr), mpReferenceKF(static_cast<KeyFrame *>(nullptr)),
           mbIsSet(false), mbImuPreintegrated(false), mpCamera(pCamera), mpCamera2(nullptr)
@@ -462,14 +462,35 @@ namespace ORB_SLAM3
 
         mTimeORB_Ext = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndExtORB - time_StartExtORB).count();
 #endif
-
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_StartExtLine = std::chrono::steady_clock::now();
 #endif
-        thread threadLeft_Line(&Frame::ExtractLine,this,0,imLeft);
-        thread threadRight_Line(&Frame::ExtractLine,this,1,imRight);
-        threadLeft_Line.join();
-        threadRight_Line.join();
+        // std::cout << "Lines include classes: ";
+        // for (const int& cls : lines_include_classes) {
+        //     std::cout << cls << " ";
+        // }
+        // std::cout << std::endl;
+
+        if (!lines_include_classes.empty()) {
+            cv::Mat mask = cv::Mat::zeros(imLeftSem.size(), CV_8U);
+            for (int y = 0; y < imLeftSem.rows; ++y) {
+                for (int x = 0; x < imLeftSem.cols; ++x) {
+                    int cls = (int)(imLeftSem.at<cv::Vec3b>(cv::Point(x, y))[0]);
+                    if (lines_include_classes.count(cls)) {
+                        mask.at<uchar>(y, x) = 1; 
+                    }
+                }
+            }
+            thread threadLeft_Line(&Frame::ExtractLineSem,this,0,imLeft, mask);
+            thread threadRight_Line(&Frame::ExtractLine,this,1,imRight);
+            threadLeft_Line.join();
+            threadRight_Line.join();
+        } else {
+            thread threadLeft_Line(&Frame::ExtractLine,this,0,imLeft);
+            thread threadRight_Line(&Frame::ExtractLine,this,1,imRight);
+            threadLeft_Line.join();
+            threadRight_Line.join();
+        }
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndExtLine = std::chrono::steady_clock::now();
 
@@ -1173,6 +1194,14 @@ namespace ORB_SLAM3
             (*mpLineExtractorLeft)(im,cv::Mat(),mvKeysLine,mDescriptorsLine);
         else
             (*mpLineExtractorRight)(im,cv::Mat(),mvKeysRightLine,mDescriptorsRightLine);
+    }
+
+    void Frame::ExtractLineSem(int flag, const cv::Mat &im, const cv::Mat &mask)
+    {
+        if(flag==0)
+            (*mpLineExtractorLeft)(im,mask,mvKeysLine,mDescriptorsLine);
+        else
+            (*mpLineExtractorRight)(im,mask,mvKeysRightLine,mDescriptorsRightLine);
     }
 
     bool Frame::isSet() const

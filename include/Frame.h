@@ -71,7 +71,7 @@ namespace ORB_SLAM3
         Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), const bool moving_flag = false, const bool dynamic_flag = false, const bool semantic_flag = false, const bool instance_flag = false);
 
         // Constructor for stereo cameras with semantic and lines.
-        Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight, LineExtractor* LineExtractorLeft, LineExtractor* LineExtractorRight, ORBVocabulary *voc, LineVocabulary* voc_line, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), const bool moving_flag = false, const bool dynamic_flag = false, const bool semantic_flag = false, const bool instance_flag = false, const bool hard_semantic_lines_flag = false, const bool hard_instance_lines_flag = false);
+        Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const cv::Mat &imLeftSem, const unordered_map<int, bool> &seg_meta, const double &timeStamp, ORBextractor *extractorLeft, ORBextractor *extractorRight, LineExtractor* LineExtractorLeft, LineExtractor* LineExtractorRight, ORBVocabulary *voc, LineVocabulary* voc_line, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib(), const bool moving_flag = false, const bool dynamic_flag = false, const bool semantic_flag = false, const bool instance_flag = false, const bool hard_semantic_lines_flag = false, const bool hard_instance_lines_flag = false, const std::set<int> &lines_include_classes = std::set<int>());
 
         // Constructor for RGB-D cameras.
         Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor *extractor, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera *pCamera, Frame *pPrevF = static_cast<Frame *>(NULL), const IMU::Calib &ImuCalib = IMU::Calib());
@@ -87,7 +87,7 @@ namespace ORB_SLAM3
         void ExtractORBSem(int flag, const cv::Mat &im, const int x0, const int x1, const cv::Mat &imSem);
         // Extract lines on the image. 0 for left image and 1 for right image.
         void ExtractLine(int flag, const cv::Mat &im);
-
+        void ExtractLineSem(int flag, const cv::Mat &im, const cv::Mat &mask);
         // Compute Bag of Words representation.
         void ComputeBoW();
 

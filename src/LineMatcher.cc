@@ -43,8 +43,16 @@ namespace ORB_SLAM3 {
 
     int LineMatcher::matchNNR(const cv::Mat &desc1, const cv::Mat &desc2, std::vector<int> &matches_12) {
 
+        if(desc1.empty() || desc2.empty() || desc1.rows == 0 || desc2.rows == 0) {
+            matches_12.clear();
+            return 0;
+        }
         int matches = 0;
         matches_12.resize(desc1.rows, -1);
+        // std::cout << "Desc1: rows=" << desc1.rows << " cols=" << desc1.cols 
+        //         << " type=" << desc1.type() << std::endl;
+        // std::cout << "Desc2: rows=" << desc2.rows << " cols=" << desc2.cols 
+        //         << " type=" << desc2.type() << std::endl;
 
         std::vector<std::vector<cv::DMatch>> matches_;
         cv::Ptr<cv::BFMatcher> bfm = cv::BFMatcher::create(cv::NORM_HAMMING, false); // cross-check

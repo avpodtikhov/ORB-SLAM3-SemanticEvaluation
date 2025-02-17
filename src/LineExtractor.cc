@@ -64,7 +64,11 @@ namespace ORB_SLAM3
             opts.n_bins       = lsd_n_bins;
             opts.min_length   = min_line_length*(std::min(img.cols,img.rows));
 
-            lsd->detect(img, keylines, scale, nlevels, opts);
+            if (mask.empty()) {
+                lsd->detect(img, keylines, scale, nlevels, opts);
+            } else {
+                lsd->detect(img, keylines, scale, nlevels, opts, mask);
+            }
             // filter keyline
             if(int(keylines.size()) > lsd_nfeatures && lsd_nfeatures != 0)
             {
