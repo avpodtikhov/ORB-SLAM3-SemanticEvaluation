@@ -11,3 +11,5 @@ git tag x.x.x
 git push origin x.x.x
 
 Версии x.x.x - основные с зафикисрованным результатом, для экспериментальных версий используются названия вида exp-<name>-x.x.x
+
+./Examples/Stereo/stereo_carla Vocabulary/ORBvoc.txt Examples/Stereo/AirSim.yaml res.txt

@@ -1,36 +1,56 @@
+/**
+ * This file is part of ORB-SLAM3
+ *
+ * Copyright (C) 2017-2021 Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+ * Copyright (C) 2014-2016 Raúl Mur-Artal, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+ *
+ * ORB-SLAM3 is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+ * License as published by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ORB-SLAM3 is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+ * the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with ORB-SLAM3.
+ * If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <iostream>
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <chrono>
-#include <fstream>
+
 #include <opencv2/core/core.hpp>
 
 #include <System.h>
-#include <nlohmann/json.hpp>
-#include <unordered_map>
 
 using namespace std;
-using json = nlohmann::json;
 
-void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft, vector<string> &vstrImageLeftSemantic, vector<string> &vstrImageRight, vector<double> &vTimestamps);
+void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
+                vector<string> &vstrImageRight, vector<double> &vTimestamps);
 
-int main(int argc, char **argv) {
-        if (argc != 5) {
+int main(int argc, char **argv)
+{
+        std::cout << "launched";
+        if (argc != 4)
+        {
                 cerr << endl
-                     << "Usage: ./carla path_to_vocabulary path_to_settings path_to_sequence results_path" << endl;
+                     << "Usage: ./stereo_airsim path_to_vocabulary path_to_settings path_to_sequence" << endl;
                 return 1;
         }
 
+        // Retrieve paths to images
         vector<string> vstrImageLeft;
-        vector<string> vstrImageLeftSemantic;
         vector<string> vstrImageRight;
         vector<double> vTimestamps;
+        LoadImages(string(argv[3]), vstrImageLeft, vstrImageRight, vTimestamps);
 
-        LoadImages(string(argv[3]), vstrImageLeft, vstrImageLeftSemantic, vstrImageRight, vTimestamps);
         const int nImages = vstrImageLeft.size();
 
-        ORB_SLAM3::System SLAM(argv[1], argv[2], ORB_SLAM3::System::STEREO, true, 0, std::string());
+        // Create SLAM system. It initializes all system threads and gets ready to process frames.
+        ORB_SLAM3::System SLAM(argv[1], argv[2], ORB_SLAM3::System::STEREO, true);
         float imageScale = SLAM.GetImageScale();
 
         // Vector for tracking time statistics
@@ -47,18 +67,12 @@ int main(int argc, char **argv) {
         double t_resize = 0.f;
 
         // Main loop
-        cv::Mat imLeft, imLeftSem, imRight;
+        cv::Mat imLeft, imRight;
         for (int ni = 0; ni < nImages; ni++)
         {
                 // Read left and right images from file
-                imLeft = cv::imread(vstrImageLeft[ni], cv::IMREAD_UNCHANGED);
-                imRight = cv::imread(vstrImageRight[ni], cv::IMREAD_UNCHANGED);
-                // Read semantic information for left image (segmentation image and json with moving objects)
-                imLeftSem = cv::imread(vstrImageLeftSemantic[ni], cv::IMREAD_UNCHANGED);
-                // cout << "Semantic image size: " << imLeftSem.size() << endl;
-                // cv::imshow("Semantic Image", imLeftSem);
-                // cv::waitKey(0); // Wait for any key press to continue
-                
+                imLeft = cv::imread(vstrImageLeft[ni], cv::IMREAD_UNCHANGED);   //,cv::IMREAD_UNCHANGED);
+                imRight = cv::imread(vstrImageRight[ni], cv::IMREAD_UNCHANGED); //,cv::IMREAD_UNCHANGED);
                 double tframe = vTimestamps[ni];
 
                 if (imLeft.empty())
@@ -75,19 +89,18 @@ int main(int argc, char **argv) {
 #ifdef COMPILEDWITHC11
                         std::chrono::steady_clock::time_point t_Start_Resize = std::chrono::steady_clock::now();
 #else
-                        std::chrono::steady_clock::time_point t_Start_Resize = std::chrono::steady_clock::now();
+                        std::chrono::monotonic_clock::time_point t_Start_Resize = std::chrono::monotonic_clock::now();
 #endif
 #endif
                         int width = imLeft.cols * imageScale;
                         int height = imLeft.rows * imageScale;
                         cv::resize(imLeft, imLeft, cv::Size(width, height));
                         cv::resize(imRight, imRight, cv::Size(width, height));
-                        cv::resize(imLeftSem, imLeftSem, cv::Size(width, height));
 #ifdef REGISTER_TIMES
 #ifdef COMPILEDWITHC11
                         std::chrono::steady_clock::time_point t_End_Resize = std::chrono::steady_clock::now();
 #else
-                        std::chrono::steady_clock::time_point t_End_Resize = std::chrono::steady_clock::now();
+                        std::chrono::monotonic_clock::time_point t_End_Resize = std::chrono::monotonic_clock::now();
 #endif
                         t_resize = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(t_End_Resize - t_Start_Resize).count();
                         SLAM.InsertResizeTime(t_resize);
@@ -97,17 +110,16 @@ int main(int argc, char **argv) {
 #ifdef COMPILEDWITHC11
                 std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
 #else
-                std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+                std::chrono::monotonic_clock::time_point t1 = std::chrono::monotonic_clock::now();
 #endif
 
                 // Pass the images to the SLAM system
-                std::unordered_map<int, bool> empty_seg_meta;
-                SLAM.TrackStereoSemantic(imLeft, imRight, imLeftSem, empty_seg_meta, tframe);
+                SLAM.TrackStereo(imLeft, imRight, tframe);
 
 #ifdef COMPILEDWITHC11
                 std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 #else
-                std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+                std::chrono::monotonic_clock::time_point t2 = std::chrono::monotonic_clock::now();
 #endif
 
 #ifdef REGISTER_TIMES
@@ -126,8 +138,8 @@ int main(int argc, char **argv) {
                 else if (ni > 0)
                         T = tframe - vTimestamps[ni - 1];
 
-                // if (ttrack < T)
-                //         usleep((T - ttrack) * 1e6);
+                if (ttrack < T)
+                        usleep((T - ttrack) * 1e6);
         }
 
         // Stop all threads
@@ -146,16 +158,13 @@ int main(int argc, char **argv) {
         cout << "mean tracking time: " << totaltime / nImages << endl;
 
         // Save camera trajectory
-        SLAM.SaveTrajectoryKITTI(string(argv[4]));
+        SLAM.SaveTrajectoryEuRoC(string(argv[3]) + "/trajectory_stereo.txt");
 
         return 0;
 }
 
-void LoadImages(const string &strPathToSequence,
-                vector<string> &vstrImageLeft,
-                vector<string> &vstrImageLeftSemantic,
-                vector<string> &vstrImageRight,
-                vector<double> &vTimestamps)
+void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft,
+                vector<string> &vstrImageRight, vector<double> &vTimestamps)
 {
         cout << "started";
         ifstream fTimes;
@@ -185,24 +194,17 @@ void LoadImages(const string &strPathToSequence,
                         ss >> t;
                         vTimestamps.push_back(t * 1e-3);
                         string s2;
+                        // stringstream ss2(result[16]);
                         stringstream ss2(result[1]);
                         vector<string> imgs;
                         while (getline(ss2, s2, ';'))
                         {
                                 imgs.push_back(strPathToSequence + "/images/" + s2);
                         }
-                        string semantic_path = imgs[0];
-                        size_t pos = semantic_path.find("/images/");
-                        if (pos != string::npos) {
-                            semantic_path.replace(pos, string("/images/").length(), "/masks/");
-                        }
-                        pos = semantic_path.rfind(".");
-                        if (pos != string::npos) {
-                            semantic_path.replace(pos, semantic_path.length() - pos, ".png");
-                        }
                         vstrImageLeft.push_back(imgs[0]);
                         vstrImageRight.push_back(imgs[1]);
-                        vstrImageLeftSemantic.push_back(semantic_path);
+                        cout << imgs[0] << endl;
+                        cout << imgs[1] << endl;
                 }
         }
 }
